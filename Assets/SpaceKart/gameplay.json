@@ -1,0 +1,21 @@
+{
+  "game": {
+    "title": "CHK Space Kart",
+    "laps": 3,
+    "targetFps": 60,
+    "orientation": "landscape"
+  },
+  "pilots": [
+    {"id":"cheikh","name":"Cheikh","speed":1.00,"acceleration":1.00,"handling":1.00,"boost":1.08},
+    {"id":"yvane","name":"Yvane","speed":0.98,"acceleration":1.08,"handling":1.04,"boost":1.02},
+    {"id":"nelvin","name":"Nelvin","speed":1.04,"acceleration":0.98,"handling":1.08,"boost":1.00},
+    {"id":"nova7","name":"Nova-7","speed":1.07,"acceleration":1.02,"handling":0.94,"boost":1.05}
+  ],
+  "circuits": [
+    {"id":"mars_orbit","name":"Orbite de Mars","difficulty":1,"hazards":["météorites","poussière rouge"]},
+    {"id":"saturn_rings","name":"Anneaux de Saturne","difficulty":2,"hazards":["glace","anneaux brisés"]},
+    {"id":"lunar_eclipse","name":"Éclipse lunaire","difficulty":2,"hazards":["zones d’ombre","faible gravité"]},
+    {"id":"nebula_rift","name":"Faille de la Nébuleuse","difficulty":3,"hazards":["éclairs plasma","portails"]},
+    {"id":"black_hole","name":"Singularité finale","difficulty":4,"hazards":["distorsion","débris orbitaux"]}
+  ]
+}

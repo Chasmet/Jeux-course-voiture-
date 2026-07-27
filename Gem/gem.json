@@ -1,0 +1,13 @@
+{
+  "gem_name": "SpaceKart",
+  "version": "0.1.0",
+  "display_name": "CHK Space Kart Gameplay",
+  "license": "Apache-2.0 OR MIT",
+  "origin": "Chasmet",
+  "type": "Code",
+  "summary": "Gameplay natif O3DE du jeu CHK Space Kart.",
+  "canonical_tags": ["Gem", "Gameplay"],
+  "user_tags": ["Kart", "Android"],
+  "platforms": ["Android", "Windows", "Linux"],
+  "dependencies": []
+}

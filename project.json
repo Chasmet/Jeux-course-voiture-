@@ -1,0 +1,27 @@
+{
+  "project_name": "SpaceKart",
+  "version": "0.1.0",
+  "project_id": "{1E46B6CE-4B66-4BDA-8B29-C20710B62DD9}",
+  "origin": "Chasmet",
+  "license": "Apache-2.0 OR MIT",
+  "display_name": "CHK Space Kart",
+  "summary": "Jeu de karting 3D spatial Android avec quatre pilotes et cinq circuits.",
+  "canonical_tags": ["Project", "Game", "Android"],
+  "user_tags": ["Karting", "Space", "Mobile"],
+  "engine": "o3de",
+  "external_subdirectories": ["Gem"],
+  "gem_names": [
+    "SpaceKart",
+    "Atom",
+    "CameraFramework",
+    "DebugDraw",
+    "GameState",
+    "LyShine",
+    "MiniAudio",
+    "PhysX5",
+    "PrimitiveAssets",
+    "PrefabBuilder",
+    "SaveData",
+    "StartingPointInput"
+  ]
+}

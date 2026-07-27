@@ -1,0 +1,13 @@
+# O3DE generated folders
+/build/
+/Cache/
+/AssetProcessorTemp/
+/user/
+*.log
+*.apk
+*.aab
+*.keystore
+.gradle/
+.idea/
+.vscode/
+.DS_Store

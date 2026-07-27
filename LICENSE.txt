@@ -1,0 +1,7 @@
+Copyright 2026 Chasmet
+
+This project is licensed under either of:
+- Apache License 2.0
+- MIT License
+
+at your option.

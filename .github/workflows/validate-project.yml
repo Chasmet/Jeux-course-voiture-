@@ -1,0 +1,30 @@
+name: Validate O3DE project
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON files
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          files = list(pathlib.Path('.').rglob('*.json')) + list(pathlib.Path('.').rglob('*.setreg'))
+          for path in files:
+              with path.open(encoding='utf-8') as f:
+                  json.load(f)
+              print('OK', path)
+          PY
+      - name: Check mandatory project files
+        shell: bash
+        run: |
+          test -f project.json
+          test -f CMakeLists.txt
+          test -f Gem/gem.json
+          test -f Gem/Source/SpaceKartSystemComponent.cpp
+          test -f Platform/Android/android_project.json
+          test -f scripts/export_android.ps1

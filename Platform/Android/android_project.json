@@ -1,0 +1,9 @@
+{
+  "Tags": ["Android"],
+  "android_settings": {
+    "package_name": "com.chasmet.spacekart",
+    "version_number": 1,
+    "version_name": "0.1.0",
+    "orientation": "landscape"
+  }
+}

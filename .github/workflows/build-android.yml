@@ -1,0 +1,72 @@
+name: Build CHK Space Kart APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-apk:
+    runs-on: [self-hosted, Windows, X64, o3de]
+    timeout-minutes: 240
+    env:
+      O3DE_ENGINE_PATH: C:\o3de
+      ANDROID_HOME: C:\Android\Sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify installed tools
+        shell: powershell
+        run: |
+          if (!(Test-Path "$env:O3DE_ENGINE_PATH\scripts\o3de.bat")) { throw "O3DE absent du runner" }
+          if (!(Test-Path "$env:ANDROID_HOME")) { throw "Android SDK absent du runner" }
+          java -version
+          cmake --version
+          ninja --version
+
+      - name: Prepare O3DE project
+        shell: powershell
+        run: .\scripts\prepare_project.ps1
+
+      - name: Create signing keystore when secrets are configured
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        shell: powershell
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          [IO.File]::WriteAllBytes("$pwd\android-release.keystore", [Convert]::FromBase64String($env:KEYSTORE_BASE64))
+
+      - name: Configure signing
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        shell: powershell
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          $o3de = "$env:O3DE_ENGINE_PATH\scripts\o3de.bat"
+          & $o3de android-configure --set-value signconfig.store.file="$pwd\android-release.keystore"
+          & $o3de android-configure --set-value signconfig.key.alias=$env:KEY_ALIAS
+          $env:STORE_PASSWORD | & $o3de android-configure --set-password signconfig.store.password
+          $env:KEY_PASSWORD | & $o3de android-configure --set-password signconfig.key.password
+
+      - name: Export and compile APK with O3DE and Gradle
+        shell: powershell
+        run: .\scripts\export_android.ps1 -Configuration profile
+
+      - name: Collect APK
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $apks = Get-ChildItem build\game-android -Recurse -Filter *.apk
+          if (!$apks) { throw "Aucun APK compilé" }
+          Copy-Item $apks.FullName artifacts\
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHK-Space-Kart-APK
+          path: artifacts/*.apk
+          if-no-files-found: error
+          retention-days: 30

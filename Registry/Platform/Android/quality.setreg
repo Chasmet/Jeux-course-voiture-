@@ -1,0 +1,14 @@
+{
+  "O3DE": {
+    "Quality": {
+      "DefaultGroup": "Mobile",
+      "Groups": {
+        "Mobile": {
+          "ResolutionScale": 0.85,
+          "ShadowQuality": 1,
+          "AntiAliasing": 1
+        }
+      }
+    }
+  }
+}
