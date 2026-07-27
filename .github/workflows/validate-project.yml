@@ -1,0 +1,35 @@
+name: Validate O3DE Project
+
+on:
+  push:
+    branches:
+      - main
+      - agent/**
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate manifests, gameplay data and source layout
+        run: python scripts/validate_project.py
+
+      - name: Check JSON formatting
+        run: |
+          python -m json.tool project.json >/dev/null
+          python -m json.tool Gem/gem.json >/dev/null
+          python -m json.tool Assets/Config/game_content.json >/dev/null
