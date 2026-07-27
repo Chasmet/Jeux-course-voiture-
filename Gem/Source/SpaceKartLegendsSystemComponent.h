@@ -52,6 +52,14 @@ namespace SpaceKartLegends
             Brake
         };
 
+        enum class FrontendState : AZ::u8
+        {
+            PilotSelection,
+            Racing,
+            Results,
+            ChampionshipComplete
+        };
+
         void EnsureActiveCamera();
         void DestroyOwnedCamera();
         void UpdateCamera();
@@ -59,7 +67,21 @@ namespace SpaceKartLegends
         bool HandleTouchInput(const AzFramework::InputChannel& inputChannel);
         void ReleaseTouchRole(size_t touchIndex);
 
+        void ResetInputState();
+        void NavigateFrontend(int direction);
+        void ConfirmFrontend();
+        void FinishCurrentRace();
+        void RestartCurrentRace();
+        void DrawFrontendHud(AzFramework::DebugDisplayRequests& debugDisplay) const;
+        static int PointsForPlace(int place);
+
         SpaceKartRace m_race;
+        FrontendState m_frontendState = FrontendState::PilotSelection;
+        int m_currentCircuit = 0;
+        int m_championshipPoints = 0;
+        int m_lastRacePoints = 0;
+        bool m_resultHandled = false;
+
         bool m_leftPressed = false;
         bool m_rightPressed = false;
         bool m_acceleratePressed = true;
