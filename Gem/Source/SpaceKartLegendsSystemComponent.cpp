@@ -1,11 +1,13 @@
 #include "SpaceKartLegendsSystemComponent.h"
 
+#include <AzCore/Component/Entity.h>
 #include <AzCore/Component/TransformBus.h>
 #include <AzCore/Math/Transform.h>
 #include <AzCore/Serialization/EditContext.h>
 #include <AzCore/Serialization/SerializeContext.h>
 #include <AzCore/std/algorithm.h>
 #include <AzFramework/Components/CameraBus.h>
+#include <AzFramework/Components/TransformComponent.h>
 #include <AzFramework/Entity/GameEntityContextBus.h>
 #include <AzFramework/Input/Devices/Gamepad/InputDeviceGamepad.h>
 #include <AzFramework/Input/Devices/Keyboard/InputDeviceKeyboard.h>
@@ -23,7 +25,7 @@ namespace SpaceKartLegends
         if (auto* serializeContext = azrtti_cast<AZ::SerializeContext*>(context))
         {
             serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()
-                ->Version(3);
+                ->Version(4);
 
             if (AZ::EditContext* editContext = serializeContext->GetEditContext())
             {
@@ -71,6 +73,8 @@ namespace SpaceKartLegends
         m_activeDriftTouches = 0;
         m_activeBrakeTouches = 0;
         m_touchRoles.fill(TouchRole::None);
+        m_activeCamera = AZ::EntityId();
+        m_ownsActiveCamera = false;
         m_race.Reset();
 
         AzFramework::InputChannelEventListener::Connect();
@@ -81,6 +85,9 @@ namespace SpaceKartLegends
             gameContextId,
             &AzFramework::GameEntityContextRequestBus::Events::GetGameEntityContextId);
         AzFramework::ViewportDebugDisplayEventBus::Handler::BusConnect(gameContextId);
+
+        EnsureActiveCamera();
+        UpdateCamera();
     }
 
     void SpaceKartLegendsSystemComponent::Deactivate()
@@ -88,10 +95,86 @@ namespace SpaceKartLegends
         AzFramework::ViewportDebugDisplayEventBus::Handler::BusDisconnect();
         AZ::TickBus::Handler::BusDisconnect();
         AzFramework::InputChannelEventListener::Disconnect();
+        DestroyOwnedCamera();
         m_activeCamera = AZ::EntityId();
         m_touchRoles.fill(TouchRole::None);
         m_activeDriftTouches = 0;
         m_activeBrakeTouches = 0;
+    }
+
+    void SpaceKartLegendsSystemComponent::EnsureActiveCamera()
+    {
+        if (m_activeCamera.IsValid())
+        {
+            return;
+        }
+
+        Camera::CameraSystemRequestBus::BroadcastResult(
+            m_activeCamera,
+            &Camera::CameraSystemRequestBus::Events::GetActiveCamera);
+        if (m_activeCamera.IsValid())
+        {
+            m_ownsActiveCamera = false;
+            return;
+        }
+
+        AZ::Entity* cameraEntity = nullptr;
+        AzFramework::GameEntityContextRequestBus::BroadcastResult(
+            cameraEntity,
+            &AzFramework::GameEntityContextRequestBus::Events::CreateGameEntity,
+            "SpaceKartGameplayCamera");
+        if (!cameraEntity)
+        {
+            return;
+        }
+
+        const AZ::EntityId cameraId = cameraEntity->GetId();
+        AZ::Component* transformComponent = cameraEntity->CreateComponent<AzFramework::TransformComponent>();
+        AZ::Component* cameraComponent = cameraEntity->CreateComponent(Camera::CameraComponentTypeId);
+        if (!transformComponent || !cameraComponent)
+        {
+            AzFramework::GameEntityContextRequestBus::Broadcast(
+                &AzFramework::GameEntityContextRequestBus::Events::DestroyGameEntity,
+                cameraId);
+            return;
+        }
+
+        cameraEntity->Init();
+        AzFramework::GameEntityContextRequestBus::Broadcast(
+            &AzFramework::GameEntityContextRequestBus::Events::ActivateGameEntity,
+            cameraId);
+
+        m_activeCamera = cameraId;
+        m_ownsActiveCamera = true;
+
+        Camera::CameraRequestBus::Event(
+            m_activeCamera,
+            &Camera::CameraRequestBus::Events::SetFovDegrees,
+            68.0f);
+        Camera::CameraRequestBus::Event(
+            m_activeCamera,
+            &Camera::CameraRequestBus::Events::SetNearClipDistance,
+            0.08f);
+        Camera::CameraRequestBus::Event(
+            m_activeCamera,
+            &Camera::CameraRequestBus::Events::SetFarClipDistance,
+            600.0f);
+        Camera::CameraRequestBus::Event(
+            m_activeCamera,
+            &Camera::CameraRequestBus::Events::MakeActiveView);
+    }
+
+    void SpaceKartLegendsSystemComponent::DestroyOwnedCamera()
+    {
+        if (!m_ownsActiveCamera || !m_activeCamera.IsValid())
+        {
+            return;
+        }
+
+        AzFramework::GameEntityContextRequestBus::Broadcast(
+            &AzFramework::GameEntityContextRequestBus::Events::DestroyGameEntity,
+            m_activeCamera);
+        m_ownsActiveCamera = false;
     }
 
     void SpaceKartLegendsSystemComponent::OnTick(float deltaTime, [[maybe_unused]] AZ::ScriptTimePoint time)
@@ -284,13 +367,7 @@ namespace SpaceKartLegends
 
     void SpaceKartLegendsSystemComponent::UpdateCamera()
     {
-        if (!m_activeCamera.IsValid())
-        {
-            Camera::CameraSystemRequestBus::BroadcastResult(
-                m_activeCamera,
-                &Camera::CameraSystemRequestBus::Events::GetActiveCamera);
-        }
-
+        EnsureActiveCamera();
         if (!m_activeCamera.IsValid())
         {
             return;
