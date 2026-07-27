@@ -4,6 +4,7 @@
 #include <AzCore/Math/Transform.h>
 #include <AzCore/Serialization/EditContext.h>
 #include <AzCore/Serialization/SerializeContext.h>
+#include <AzCore/std/algorithm.h>
 #include <AzFramework/Components/CameraBus.h>
 #include <AzFramework/Entity/GameEntityContextBus.h>
 #include <AzFramework/Input/Devices/Gamepad/InputDeviceGamepad.h>
@@ -21,13 +22,13 @@ namespace SpaceKartLegends
         if (auto* serializeContext = azrtti_cast<AZ::SerializeContext*>(context))
         {
             serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()
-                ->Version(1);
+                ->Version(2);
 
             if (AZ::EditContext* editContext = serializeContext->GetEditContext())
             {
                 editContext->Class<SpaceKartLegendsSystemComponent>(
                     "Space Kart Legends",
-                    "Systeme de course arcade 3D, IA, circuits et rendu du prototype.")
+                    "Systeme de course arcade 3D, IA, circuits et prototype Android.")
                     ->ClassElement(AZ::Edit::ClassElements::EditorData, "")
                     ->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC_CE("System"))
                     ->Attribute(AZ::Edit::Attributes::AutoExpand, true);
@@ -59,6 +60,14 @@ namespace SpaceKartLegends
 
     void SpaceKartLegendsSystemComponent::Activate()
     {
+        m_leftPressed = false;
+        m_rightPressed = false;
+        m_acceleratePressed = true;
+        m_brakePressed = false;
+        m_driftPressed = false;
+        m_gamepadSteering = 0.0f;
+        m_race.Reset();
+
         AzFramework::InputChannelEventListener::Connect();
         AZ::TickBus::Handler::BusConnect();
 
@@ -74,12 +83,14 @@ namespace SpaceKartLegends
         AzFramework::ViewportDebugDisplayEventBus::Handler::BusDisconnect();
         AZ::TickBus::Handler::BusDisconnect();
         AzFramework::InputChannelEventListener::Disconnect();
-        m_activeCamera.SetInvalid();
+        m_activeCamera = AZ::EntityId();
     }
 
     void SpaceKartLegendsSystemComponent::OnTick(float deltaTime, [[maybe_unused]] AZ::ScriptTimePoint time)
     {
         ApplyDigitalSteering();
+        m_race.SetAccelerating(m_acceleratePressed);
+        m_race.SetBraking(m_brakePressed);
         m_race.Update(deltaTime);
         UpdateCamera();
     }
@@ -114,6 +125,20 @@ namespace SpaceKartLegends
             id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowRight)
         {
             m_rightPressed = active;
+            return true;
+        }
+
+        if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericW ||
+            id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowUp)
+        {
+            m_acceleratePressed = active;
+            return true;
+        }
+
+        if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericS ||
+            id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowDown)
+        {
+            m_brakePressed = active;
             return true;
         }
 
