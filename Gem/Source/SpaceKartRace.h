@@ -82,6 +82,41 @@ namespace SpaceKartLegends
         void RecoverPlayer();
         void SelectNextCircuit();
 
+        void SelectPilot(int direction)
+        {
+            m_selectedPilotIndex = (m_selectedPilotIndex + direction) % DriverCount;
+            if (m_selectedPilotIndex < 0)
+            {
+                m_selectedPilotIndex += DriverCount;
+            }
+
+            const AZStd::array<const char*, DriverCount> names = {"Cheikh", "Yvane", "Nelvyn", "Nova"};
+            const AZStd::array<AZ::Color, DriverCount> colors = {
+                AZ::Color(0.10f, 0.55f, 1.0f, 1.0f),
+                AZ::Color(1.0f, 0.72f, 0.05f, 1.0f),
+                AZ::Color(0.15f, 0.95f, 0.42f, 1.0f),
+                AZ::Color(0.95f, 0.25f, 0.95f, 1.0f)
+            };
+
+            for (int slot = 0; slot < DriverCount; ++slot)
+            {
+                const int profile = (m_selectedPilotIndex + slot) % DriverCount;
+                m_drivers[slot].m_name = names[profile];
+                m_drivers[slot].m_color = colors[profile];
+            }
+            Reset(m_circuitIndex);
+        }
+
+        int GetSelectedPilotIndex() const
+        {
+            return m_selectedPilotIndex;
+        }
+
+        const char* GetSelectedPilotName() const
+        {
+            return m_drivers[0].m_name.c_str();
+        }
+
         // Repositions the next pickup target after an item has been consumed.
         // This allows another item to be collected later in the same lap.
         void RefreshPickupTargets()
@@ -156,6 +191,7 @@ namespace SpaceKartLegends
         AZStd::array<CircuitDefinition, CircuitCount> m_circuits;
         AZStd::array<DriverState, DriverCount> m_drivers;
         int m_circuitIndex = 0;
+        int m_selectedPilotIndex = 0;
         float m_steering = 0.0f;
         bool m_accelerating = true;
         bool m_braking = false;
