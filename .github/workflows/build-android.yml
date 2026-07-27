@@ -26,9 +26,8 @@ on:
 permissions:
   contents: read
 
-# O3DE's Linux SDK occupies roughly 18 GB after installation. This workflow
-# therefore targets a prepared runner instead of pretending that a small
-# GitHub-hosted runner can reliably install and export the full engine.
+# The O3DE engine and Android toolchain are too large for a reliable clean
+# install on a small hosted runner. This workflow uses a prepared build runner.
 jobs:
   build-apk:
     runs-on: [self-hosted, Linux, X64, o3de-26.05, android]
@@ -46,7 +45,10 @@ jobs:
         with:
           lfs: true
 
-      - name: Validate project
+      - name: Generate pilot and kart blockout models
+        run: python3 scripts/generate_blockout_assets.py
+
+      - name: Validate project and generated models
         run: python3 scripts/validate_project.py
 
       - name: Verify Android and O3DE tools
