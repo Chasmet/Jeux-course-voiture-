@@ -1,0 +1,14 @@
+{
+  "gem_name": "SpaceKartLegends",
+  "version": "0.1.0",
+  "display_name": "Space Kart Legends Gameplay",
+  "license": "Apache-2.0 OR MIT",
+  "origin": "Chasmet",
+  "origin_url": "https://github.com/Chasmet/Jeux-course-voiture-",
+  "type": "Code",
+  "summary": "Gameplay de karting arcade spatial, pilotes, circuits et IA.",
+  "canonical_tags": ["Gem"],
+  "user_tags": ["Kart", "Racing", "Android"],
+  "platforms": ["Android", "Windows", "Linux"],
+  "dependencies": []
+}
