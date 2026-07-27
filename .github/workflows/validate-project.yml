@@ -25,7 +25,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate manifests, gameplay data and source layout
+      - name: Generate pilot and kart blockout models
+        run: python scripts/generate_blockout_assets.py
+
+      - name: Validate manifests, generated assets and gameplay source
         run: python scripts/validate_project.py
 
       - name: Check JSON formatting
@@ -33,3 +36,11 @@ jobs:
           python -m json.tool project.json >/dev/null
           python -m json.tool Gem/gem.json >/dev/null
           python -m json.tool Assets/Config/game_content.json >/dev/null
+
+      - name: Publish generated 3D blockouts for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-3D-blockouts
+          path: Assets/Blockout/**/*.gltf
+          if-no-files-found: error
+          retention-days: 14
