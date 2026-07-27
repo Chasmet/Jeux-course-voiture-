@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "game": {
     "title": "Space Kart Legends",
     "platform": "Android",
@@ -16,7 +16,8 @@
       "suit": {"primary": "#B9AD91", "accent": "#168CFF", "secondary": "#F2F2EA"},
       "stats": {"speed": 7, "acceleration": 7, "handling": 7, "weight": 8},
       "kartId": "azure_comet",
-      "modelPath": "Characters/Cheikh/cheikh.fbx",
+      "blockoutModelPath": "Blockout/Characters/Cheikh/cheikh_blockout.gltf",
+      "productionModelPath": "Characters/Cheikh/cheikh.fbx",
       "animationSet": "driver_adult"
     },
     {
@@ -26,7 +27,8 @@
       "suit": {"primary": "#0B0D12", "accent": "#FFC400", "secondary": "#252936"},
       "stats": {"speed": 9, "acceleration": 7, "handling": 6, "weight": 5},
       "kartId": "solar_strike",
-      "modelPath": "Characters/Yvane/yvane.fbx",
+      "blockoutModelPath": "Blockout/Characters/Yvane/yvane_blockout.gltf",
+      "productionModelPath": "Characters/Yvane/yvane.fbx",
       "animationSet": "driver_tall_child"
     },
     {
@@ -36,7 +38,8 @@
       "suit": {"primary": "#0C1118", "accent": "#32F071", "secondary": "#343A43"},
       "stats": {"speed": 6, "acceleration": 9, "handling": 9, "weight": 4},
       "kartId": "emerald_pulse",
-      "modelPath": "Characters/Nelvyn/nelvyn.fbx",
+      "blockoutModelPath": "Blockout/Characters/Nelvyn/nelvyn_blockout.gltf",
+      "productionModelPath": "Characters/Nelvyn/nelvyn.fbx",
       "animationSet": "driver_child"
     },
     {
@@ -46,7 +49,8 @@
       "suit": {"primary": "#21102F", "accent": "#F13DFF", "secondary": "#40E8FF"},
       "stats": {"speed": 8, "acceleration": 8, "handling": 7, "weight": 5},
       "kartId": "violet_photon",
-      "modelPath": "Characters/Nova/nova.fbx",
+      "blockoutModelPath": "Blockout/Characters/Nova/nova_blockout.gltf",
+      "productionModelPath": "Characters/Nova/nova.fbx",
       "animationSet": "driver_adult_light"
     }
   ],
@@ -56,7 +60,8 @@
       "displayName": "Comete Azur",
       "pilotId": "cheikh",
       "colors": ["#D8CEB6", "#168CFF", "#F4F4EE"],
-      "modelPath": "Vehicles/AzureComet/azure_comet.fbx",
+      "blockoutModelPath": "Blockout/Vehicles/AzureComet/azurecomet_blockout.gltf",
+      "productionModelPath": "Vehicles/AzureComet/azure_comet.fbx",
       "engineGlow": "blue"
     },
     {
@@ -64,7 +69,8 @@
       "displayName": "Frappe Solaire",
       "pilotId": "yvane",
       "colors": ["#080A0F", "#FFC400", "#2A2F3A"],
-      "modelPath": "Vehicles/SolarStrike/solar_strike.fbx",
+      "blockoutModelPath": "Blockout/Vehicles/SolarStrike/solarstrike_blockout.gltf",
+      "productionModelPath": "Vehicles/SolarStrike/solar_strike.fbx",
       "engineGlow": "yellow"
     },
     {
@@ -72,7 +78,8 @@
       "displayName": "Impulsion Emeraude",
       "pilotId": "nelvyn",
       "colors": ["#0B0F16", "#32F071", "#353B44"],
-      "modelPath": "Vehicles/EmeraldPulse/emerald_pulse.fbx",
+      "blockoutModelPath": "Blockout/Vehicles/EmeraldPulse/emeraldpulse_blockout.gltf",
+      "productionModelPath": "Vehicles/EmeraldPulse/emerald_pulse.fbx",
       "engineGlow": "green"
     },
     {
@@ -80,7 +87,8 @@
       "displayName": "Photon Violet",
       "pilotId": "nova",
       "colors": ["#1D0D2A", "#F13DFF", "#40E8FF"],
-      "modelPath": "Vehicles/VioletPhoton/violet_photon.fbx",
+      "blockoutModelPath": "Blockout/Vehicles/VioletPhoton/violetphoton_blockout.gltf",
+      "productionModelPath": "Vehicles/VioletPhoton/violet_photon.fbx",
       "engineGlow": "violet"
     }
   ],
