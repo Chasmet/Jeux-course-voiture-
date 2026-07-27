@@ -4,6 +4,7 @@
 
 #include <AzCore/Component/Component.h>
 #include <AzCore/Component/TickBus.h>
+#include <AzCore/std/containers/array.h>
 #include <AzFramework/Entity/EntityDebugDisplayBus.h>
 #include <AzFramework/Input/Events/InputChannelEventListener.h>
 
@@ -43,8 +44,18 @@ namespace SpaceKartLegends
             AzFramework::DebugDisplayRequests& debugDisplay) override;
 
     private:
+        enum class TouchRole : AZ::u8
+        {
+            None,
+            Steering,
+            Drift,
+            Brake
+        };
+
         void UpdateCamera();
         void ApplyDigitalSteering();
+        bool HandleTouchInput(const AzFramework::InputChannel& inputChannel);
+        void ReleaseTouchRole(size_t touchIndex);
 
         SpaceKartRace m_race;
         bool m_leftPressed = false;
@@ -53,6 +64,10 @@ namespace SpaceKartLegends
         bool m_brakePressed = false;
         bool m_driftPressed = false;
         float m_gamepadSteering = 0.0f;
+        float m_touchSteering = 0.0f;
+        int m_activeDriftTouches = 0;
+        int m_activeBrakeTouches = 0;
+        AZStd::array<TouchRole, 10> m_touchRoles{};
         AZ::EntityId m_activeCamera;
     };
 }
