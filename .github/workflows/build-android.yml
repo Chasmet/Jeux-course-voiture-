@@ -1,0 +1,116 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: O3DE build configuration
+        required: true
+        default: profile
+        type: choice
+        options:
+          - profile
+          - release
+      asset_mode:
+        description: Android asset packaging
+        required: true
+        default: PAK
+        type: choice
+        options:
+          - PAK
+          - LOOSE
+  push:
+    tags:
+      - "android-v*"
+
+permissions:
+  contents: read
+
+# O3DE's Linux SDK occupies roughly 18 GB after installation. This workflow
+# therefore targets a prepared runner instead of pretending that a small
+# GitHub-hosted runner can reliably install and export the full engine.
+jobs:
+  build-apk:
+    runs-on: [self-hosted, Linux, X64, o3de-26.05, android]
+    timeout-minutes: 180
+
+    env:
+      O3DE_ENGINE_PATH: /opt/O3DE/26.05
+      ANDROID_BUILD_PATH: ${{ github.workspace }}/build/android
+      BUILD_CONFIGURATION: ${{ inputs.configuration || 'profile' }}
+      ASSET_MODE: ${{ inputs.asset_mode || 'PAK' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Validate project
+        run: python3 scripts/validate_project.py
+
+      - name: Verify Android and O3DE tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$O3DE_ENGINE_PATH/scripts/o3de.sh"
+          test -n "${ANDROID_SDK_ROOT:-}"
+          command -v java
+          command -v gradle
+          command -v ninja
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" --help >/dev/null
+
+      - name: Register engine and project
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" register --this-engine
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" register --project-path "$GITHUB_WORKSPACE"
+
+      - name: Configure Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "sdk.root=$ANDROID_SDK_ROOT"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "platform.sdk.api=34"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "ndk.version=25.*"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "android.gradle.plugin=8.1"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --validate
+
+      - name: Export O3DE Android project and build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$ANDROID_BUILD_PATH"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" export-project \
+            -es export_source_android.py \
+            -pp "$GITHUB_WORKSPACE" \
+            -abp "$ANDROID_BUILD_PATH" \
+            -ll INFO \
+            --config "$BUILD_CONFIGURATION" \
+            --asset-mode "$ASSET_MODE"
+
+      - name: Collect APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK_PATH="$(find "$ANDROID_BUILD_PATH" -type f -name '*.apk' | head -n 1)"
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK produced by the O3DE export." >&2
+            exit 1
+          fi
+          cp "$APK_PATH" "dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk"
+          sha256sum "dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk" | tee dist/SHA256SUMS.txt
+          echo "path=dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-Android-${{ env.BUILD_CONFIGURATION }}
+          path: |
+            ${{ steps.apk.outputs.path }}
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
