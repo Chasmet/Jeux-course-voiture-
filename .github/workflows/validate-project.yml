@@ -28,8 +28,14 @@ jobs:
       - name: Generate pilot and kart blockout models
         run: python scripts/generate_blockout_assets.py
 
+      - name: Generate track and item blockout models
+        run: python scripts/generate_environment_assets.py
+
       - name: Validate manifests, generated assets and gameplay source
         run: python scripts/validate_project.py
+
+      - name: Validate generated track and item geometry
+        run: python scripts/validate_environment_assets.py
 
       - name: Validate Android export scaffold and startup level
         run: python scripts/validate_android_scaffold.py
