@@ -82,6 +82,40 @@ namespace SpaceKartLegends
         void RecoverPlayer();
         void SelectNextCircuit();
 
+        // Repositions the next pickup target after an item has been consumed.
+        // This allows another item to be collected later in the same lap.
+        void RefreshPickupTargets()
+        {
+            for (DriverState& driver : m_drivers)
+            {
+                if (driver.m_finished || driver.m_item != ItemType::None)
+                {
+                    continue;
+                }
+
+                if (driver.m_progress < 0.16f)
+                {
+                    driver.m_nextPickupIndex = 0;
+                }
+                else if (driver.m_progress < 0.41f)
+                {
+                    driver.m_nextPickupIndex = 1;
+                }
+                else if (driver.m_progress < 0.66f)
+                {
+                    driver.m_nextPickupIndex = 2;
+                }
+                else if (driver.m_progress < 0.91f)
+                {
+                    driver.m_nextPickupIndex = 3;
+                }
+                else
+                {
+                    driver.m_nextPickupIndex = 0;
+                }
+            }
+        }
+
         AZ::Vector3 GetTrackPosition(float progress, float lateralOffset = 0.0f) const;
         AZ::Vector3 GetTrackTangent(float progress) const;
         AZ::Vector3 GetPlayerPosition() const;
