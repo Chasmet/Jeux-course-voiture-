@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "game": {
+    "title": "Space Kart Legends",
+    "platform": "Android",
+    "orientation": "landscape",
+    "lapsPerRace": 3,
+    "localDrivers": 1,
+    "totalDrivers": 4
+  },
+  "pilots": [
+    {
+      "id": "cheikh",
+      "displayName": "Cheikh",
+      "role": "balanced",
+      "suit": {"primary": "#B9AD91", "accent": "#168CFF", "secondary": "#F2F2EA"},
+      "stats": {"speed": 7, "acceleration": 7, "handling": 7, "weight": 8},
+      "kartId": "azure_comet",
+      "modelPath": "Characters/Cheikh/cheikh.fbx",
+      "animationSet": "driver_adult"
+    },
+    {
+      "id": "yvane",
+      "displayName": "Yvane",
+      "role": "speed",
+      "suit": {"primary": "#0B0D12", "accent": "#FFC400", "secondary": "#252936"},
+      "stats": {"speed": 9, "acceleration": 7, "handling": 6, "weight": 5},
+      "kartId": "solar_strike",
+      "modelPath": "Characters/Yvane/yvane.fbx",
+      "animationSet": "driver_tall_child"
+    },
+    {
+      "id": "nelvyn",
+      "displayName": "Nelvyn",
+      "role": "handling",
+      "suit": {"primary": "#0C1118", "accent": "#32F071", "secondary": "#343A43"},
+      "stats": {"speed": 6, "acceleration": 9, "handling": 9, "weight": 4},
+      "kartId": "emerald_pulse",
+      "modelPath": "Characters/Nelvyn/nelvyn.fbx",
+      "animationSet": "driver_child"
+    },
+    {
+      "id": "nova",
+      "displayName": "Nova",
+      "role": "technical",
+      "suit": {"primary": "#21102F", "accent": "#F13DFF", "secondary": "#40E8FF"},
+      "stats": {"speed": 8, "acceleration": 8, "handling": 7, "weight": 5},
+      "kartId": "violet_photon",
+      "modelPath": "Characters/Nova/nova.fbx",
+      "animationSet": "driver_adult_light"
+    }
+  ],
+  "karts": [
+    {
+      "id": "azure_comet",
+      "displayName": "Comete Azur",
+      "pilotId": "cheikh",
+      "colors": ["#D8CEB6", "#168CFF", "#F4F4EE"],
+      "modelPath": "Vehicles/AzureComet/azure_comet.fbx",
+      "engineGlow": "blue"
+    },
+    {
+      "id": "solar_strike",
+      "displayName": "Frappe Solaire",
+      "pilotId": "yvane",
+      "colors": ["#080A0F", "#FFC400", "#2A2F3A"],
+      "modelPath": "Vehicles/SolarStrike/solar_strike.fbx",
+      "engineGlow": "yellow"
+    },
+    {
+      "id": "emerald_pulse",
+      "displayName": "Impulsion Emeraude",
+      "pilotId": "nelvyn",
+      "colors": ["#0B0F16", "#32F071", "#353B44"],
+      "modelPath": "Vehicles/EmeraldPulse/emerald_pulse.fbx",
+      "engineGlow": "green"
+    },
+    {
+      "id": "violet_photon",
+      "displayName": "Photon Violet",
+      "pilotId": "nova",
+      "colors": ["#1D0D2A", "#F13DFF", "#40E8FF"],
+      "modelPath": "Vehicles/VioletPhoton/violet_photon.fbx",
+      "engineGlow": "violet"
+    }
+  ],
+  "circuits": [
+    {"id": "orbit_zero", "name": "Orbite Zero", "difficulty": 1, "theme": "orbital_training", "laps": 3},
+    {"id": "saturn_rings", "name": "Anneaux de Saturne", "difficulty": 2, "theme": "saturn_ice_and_dust", "laps": 3},
+    {"id": "turbo_nebula", "name": "Nebuleuse Turbo", "difficulty": 3, "theme": "neon_nebula", "laps": 3},
+    {"id": "titan_station", "name": "Station Titan", "difficulty": 4, "theme": "industrial_space_station", "laps": 3},
+    {"id": "final_black_hole", "name": "Trou Noir Final", "difficulty": 5, "theme": "black_hole_gravity", "laps": 3}
+  ],
+  "requiredDriverAnimations": [
+    "idle",
+    "steer_left",
+    "steer_right",
+    "drift_left",
+    "drift_right",
+    "boost",
+    "brake",
+    "jump",
+    "land",
+    "impact_left",
+    "impact_right",
+    "victory",
+    "defeat"
+  ],
+  "requiredKartAnimations": [
+    "wheel_spin",
+    "front_wheel_steer",
+    "suspension_compress",
+    "suspension_release",
+    "boost_flame",
+    "drift_smoke"
+  ]
+}
