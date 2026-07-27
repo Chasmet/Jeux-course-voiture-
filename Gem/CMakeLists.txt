@@ -9,7 +9,7 @@ ly_add_target(
         PRIVATE
             AZ::AzCore
             AZ::AzFramework
-            Gem::DebugDraw
+            Gem::DebugDraw.API
 )
 
 ly_add_target(
