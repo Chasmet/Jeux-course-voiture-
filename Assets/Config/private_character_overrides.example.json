@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "privacy": "The real face-derived models are installed locally and excluded from Git.",
+  "pilots": {
+    "cheikh": {
+      "sourceModel": "PrivateCharacters/Cheikh/cheikh_real_rigged_v2.glb",
+      "targetActor": "PrivateCharacters/Cheikh/cheikh_real_rigged_v2.actor",
+      "rigVersion": 2,
+      "jointCount": 20
+    },
+    "yvane": {
+      "sourceModel": "PrivateCharacters/Yvane/yvane_real_rigged_v2.glb",
+      "targetActor": "PrivateCharacters/Yvane/yvane_real_rigged_v2.actor",
+      "rigVersion": 2,
+      "jointCount": 20
+    },
+    "nelvyn": {
+      "sourceModel": "PrivateCharacters/Nelvyn/nelvyn_real_rigged_v2.glb",
+      "targetActor": "PrivateCharacters/Nelvyn/nelvyn_real_rigged_v2.actor",
+      "rigVersion": 2,
+      "jointCount": 20
+    }
+  },
+  "requiredAnimations": [
+    "drive_idle",
+    "steer_left",
+    "steer_right",
+    "drift_left",
+    "drift_right",
+    "boost",
+    "brake",
+    "jump",
+    "land",
+    "impact_left",
+    "impact_right",
+    "spin",
+    "victory"
+  ],
+  "requiredSockets": [
+    "kart_seat_socket",
+    "steering_left_socket",
+    "steering_right_socket",
+    "face_camera_socket"
+  ]
+}
