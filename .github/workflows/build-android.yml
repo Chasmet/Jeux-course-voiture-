@@ -19,11 +19,6 @@ on:
         options:
           - PAK
           - LOOSE
-      require_private_characters:
-        description: Require the private Cheikh, Yvane and Nelvyn rig pack
-        required: true
-        default: true
-        type: boolean
   push:
     tags:
       - "android-v*"
@@ -31,9 +26,10 @@ on:
 permissions:
   contents: read
 
-# A genuine final build must run on a prepared O3DE Android machine. The job
-# refuses to publish an APK when the private pilot pack, package identity,
-# signing verification or archive integrity checks fail.
+# Final builds always require the private Cheikh, Yvane and Nelvyn character
+# pack. The archive can be supplied either as a repository secret or through a
+# protected path mounted on the self-hosted runner. No build without these
+# pilots is published as a finished APK.
 jobs:
   build-apk:
     runs-on: [self-hosted, Linux, X64, o3de-26.05, android]
@@ -44,9 +40,9 @@ jobs:
       ANDROID_BUILD_PATH: ${{ github.workspace }}/build/android
       BUILD_CONFIGURATION: ${{ inputs.configuration || 'profile' }}
       ASSET_MODE: ${{ inputs.asset_mode || 'PAK' }}
-      REQUIRE_PRIVATE_CHARACTERS: ${{ inputs.require_private_characters || 'true' }}
       EXPECTED_PACKAGE_NAME: com.chasmet.spacekartlegends
       PRIVATE_CHARACTER_PACK_B64: ${{ secrets.PRIVATE_CHARACTER_PACK_B64 }}
+      PRIVATE_CHARACTER_PACK_PATH: ${{ vars.PRIVATE_CHARACTER_PACK_PATH }}
 
     steps:
       - name: Checkout repository
@@ -63,18 +59,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${PRIVATE_CHARACTER_PACK_B64:-}" ]; then
-            if [ "$REQUIRE_PRIVATE_CHARACTERS" = "true" ]; then
-              echo "PRIVATE_CHARACTER_PACK_B64 is required for a final build." >&2
-              exit 1
-            fi
-            echo "Private character pack not supplied; continuing only because it was explicitly disabled."
+          mkdir -p .private-build-input
+          PRIVATE_ARCHIVE="$GITHUB_WORKSPACE/.private-build-input/private-characters.zip"
+
+          if [ -n "${PRIVATE_CHARACTER_PACK_B64:-}" ]; then
+            printf '%s' "$PRIVATE_CHARACTER_PACK_B64" | base64 --decode > "$PRIVATE_ARCHIVE"
+          elif [ -n "${PRIVATE_CHARACTER_PACK_PATH:-}" ] && [ -f "$PRIVATE_CHARACTER_PACK_PATH" ]; then
+            cp "$PRIVATE_CHARACTER_PACK_PATH" "$PRIVATE_ARCHIVE"
+          elif [ -f "/opt/spacekart-private/SpaceKartLegends-vrais-pilotes-rigges-v2.zip" ]; then
+            cp "/opt/spacekart-private/SpaceKartLegends-vrais-pilotes-rigges-v2.zip" "$PRIVATE_ARCHIVE"
           else
-            mkdir -p .private-build-input
-            printf '%s' "$PRIVATE_CHARACTER_PACK_B64" | base64 --decode > .private-build-input/private-characters.zip
-            python3 scripts/install_private_character_pack.py .private-build-input/private-characters.zip
-            test -f Assets/Config/private_character_overrides.json
-            python3 - <<'PY'
+            echo "A protected private character pack is mandatory for a final build." >&2
+            exit 1
+          fi
+
+          test -s "$PRIVATE_ARCHIVE"
+          unzip -t "$PRIVATE_ARCHIVE" >/dev/null
+          python3 scripts/install_private_character_pack.py "$PRIVATE_ARCHIVE"
+          test -f Assets/Config/private_character_overrides.json
+
+          python3 - <<'PY'
           import json
           from pathlib import Path
 
@@ -87,10 +91,10 @@ jobs:
               assert entry.get("jointCount") == 20
               source = Path("Assets") / entry["sourceModel"]
               assert source.is_file() and source.stat().st_size > 0, (pilot, source)
-          print("Private pilot override verified.")
+          print("Private pilot pack verified for Cheikh, Yvane and Nelvyn.")
           PY
-            rm -rf .private-build-input
-          fi
+
+          rm -rf .private-build-input
 
       - name: Generate all blockout models
         run: |
@@ -151,6 +155,20 @@ jobs:
             --log-level INFO \
             --config "$BUILD_CONFIGURATION" \
             --asset-mode "$ASSET_MODE"
+
+      - name: Verify private pilots were processed by O3DE
+        shell: bash
+        run: |
+          set -euo pipefail
+          SEARCH_ROOTS=("$ANDROID_BUILD_PATH" "$GITHUB_WORKSPACE/Cache")
+          for pilot in cheikh yvane nelvyn; do
+            if ! find "${SEARCH_ROOTS[@]}" -type f \
+              \( -iname "*${pilot}*.actor" -o -iname "*${pilot}*.azmodel" -o -iname "*${pilot}*.glb" \) \
+              -print -quit 2>/dev/null | grep -q .; then
+              echo "O3DE did not process the private model for ${pilot}." >&2
+              exit 1
+            fi
+          done
 
       - name: Collect and verify APK
         id: apk
