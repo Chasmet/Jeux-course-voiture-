@@ -218,17 +218,39 @@ def validate_track_math() -> None:
 def validate_gameplay_features() -> None:
     race_header = (ROOT / "Gem/Source/SpaceKartRace.h").read_text(encoding="utf-8")
     race_source = (ROOT / "Gem/Source/SpaceKartRace.cpp").read_text(encoding="utf-8")
+    system_header = (ROOT / "Gem/Source/SpaceKartLegendsSystemComponent.h").read_text(encoding="utf-8")
     system_source = (ROOT / "Gem/Source/SpaceKartLegendsSystemComponent.cpp").read_text(encoding="utf-8")
 
     require_tokens(
         race_header,
-        {"RacePhase", "ItemType", "UseItem", "PlasmaShield", "GravityMine", "PhotonPulse"},
+        {
+            "RacePhase",
+            "ItemType",
+            "UseItem",
+            "PlasmaShield",
+            "GravityMine",
+            "PhotonPulse",
+            "SelectPilot",
+            "GetSelectedPilotName",
+        },
         "SpaceKartRace.h",
     )
     require_tokens(
         race_source,
         {"m_countdownTime", "CheckItemPickup", "UseDriverItem", "ApplyHit", "DrawItemGates"},
         "SpaceKartRace.cpp",
+    )
+    require_tokens(
+        system_header,
+        {
+            "FrontendState",
+            "PilotSelection",
+            "Results",
+            "ChampionshipComplete",
+            "PointsForPlace",
+            "m_championshipPoints",
+        },
+        "SpaceKartLegendsSystemComponent.h",
     )
     require_tokens(
         system_source,
@@ -239,6 +261,12 @@ def validate_gameplay_features() -> None:
             "EnsureActiveCamera",
             "CameraComponentTypeId",
             "MakeActiveView",
+            "NavigateFrontend",
+            "ConfirmFrontend",
+            "FinishCurrentRace",
+            "PointsForPlace",
+            "m_championshipPoints = AZStd::max(0, m_championshipPoints - m_lastRacePoints)",
+            "5 circuits termines",
         },
         "SpaceKartLegendsSystemComponent.cpp",
     )
