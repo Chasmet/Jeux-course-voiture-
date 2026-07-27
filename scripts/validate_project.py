@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fast repository validation for Space Kart Legends.
 
-This check validates manifests, generated blockout assets, source registration
-and the critical track math. It deliberately does not claim to replace a real
-O3DE CMake/Android build.
+This validates manifests, generated blockout assets and critical gameplay source
+patterns. It deliberately does not claim to replace a real O3DE CMake/Android
+build with the engine and SDK installed.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ REQUIRED_FILES = [
     "Gem/Source/SpaceKartLegendsModule.cpp",
     "Assets/Config/game_content.json",
     "scripts/generate_blockout_assets.py",
+    "Docs/ASSET_PIPELINE.md",
 ]
 
 EXPECTED_PILOTS = {"cheikh", "yvane", "nelvyn", "nova"}
@@ -37,6 +38,12 @@ EXPECTED_CIRCUITS = {
     "turbo_nebula",
     "titan_station",
     "final_black_hole",
+}
+EXPECTED_ITEMS = {
+    "comet_boost",
+    "plasma_shield",
+    "gravity_mine",
+    "photon_pulse",
 }
 EXPECTED_ANIMATIONS = {
     "idle",
@@ -65,6 +72,12 @@ def load_json(relative_path: str) -> dict:
         fail(f"missing JSON file: {relative_path}")
     except json.JSONDecodeError as exc:
         fail(f"invalid JSON in {relative_path}: {exc}")
+
+
+def require_tokens(source: str, tokens: set[str], label: str) -> None:
+    missing = sorted(token for token in tokens if token not in source)
+    if missing:
+        fail(f"{label} is missing required gameplay tokens: {', '.join(missing)}")
 
 
 def validate_required_files() -> None:
@@ -102,8 +115,14 @@ def validate_generated_gltf(relative_path: str) -> None:
 
 def validate_game_content() -> None:
     content = load_json("Assets/Config/game_content.json")
-    if content.get("schemaVersion") != 2:
-        fail("game_content schemaVersion must be 2")
+    if content.get("schemaVersion") != 3:
+        fail("game_content schemaVersion must be 3")
+
+    game = content.get("game", {})
+    if game.get("lapsPerRace") != 3 or game.get("countdownSeconds") != 3.5:
+        fail("race configuration must use three laps and a 3.5 second countdown")
+    if game.get("autoAcceleration") is not True:
+        fail("Android arcade controls require autoAcceleration")
 
     pilots = content.get("pilots", [])
     pilot_ids = {pilot.get("id") for pilot in pilots}
@@ -114,6 +133,18 @@ def validate_game_content() -> None:
     circuit_ids = {circuit.get("id") for circuit in circuits}
     if circuit_ids != EXPECTED_CIRCUITS:
         fail(f"circuit ids mismatch: {sorted(circuit_ids)}")
+
+    item_ids = {item.get("id") for item in content.get("items", [])}
+    if item_ids != EXPECTED_ITEMS:
+        fail(f"item ids mismatch: {sorted(item_ids)}")
+    gates = content.get("itemGateProgress", [])
+    if len(gates) != 4 or gates != sorted(gates) or not all(0.0 < gate < 1.0 for gate in gates):
+        fail("itemGateProgress must contain four sorted progress values between zero and one")
+
+    controls = content.get("mobileControls", {})
+    expected_control_keys = {"steering", "item", "drift", "brake"}
+    if set(controls) != expected_control_keys:
+        fail("mobileControls must define steering, item, drift and brake")
 
     animations = set(content.get("requiredDriverAnimations", []))
     missing_animations = sorted(EXPECTED_ANIMATIONS - animations)
@@ -165,12 +196,42 @@ def validate_track_math() -> None:
         fail("GetTrackTangent must sample GetCenterlinePosition")
 
 
+def validate_gameplay_features() -> None:
+    race_header = (ROOT / "Gem/Source/SpaceKartRace.h").read_text(encoding="utf-8")
+    race_source = (ROOT / "Gem/Source/SpaceKartRace.cpp").read_text(encoding="utf-8")
+    system_source = (ROOT / "Gem/Source/SpaceKartLegendsSystemComponent.cpp").read_text(encoding="utf-8")
+
+    require_tokens(
+        race_header,
+        {"RacePhase", "ItemType", "UseItem", "PlasmaShield", "GravityMine", "PhotonPulse"},
+        "SpaceKartRace.h",
+    )
+    require_tokens(
+        race_source,
+        {"m_countdownTime", "CheckItemPickup", "UseDriverItem", "ApplyHit", "DrawItemGates"},
+        "SpaceKartRace.cpp",
+    )
+    require_tokens(
+        system_source,
+        {
+            "InputDeviceTouch",
+            "PositionData2D",
+            "m_race.UseItem()",
+            "EnsureActiveCamera",
+            "CameraComponentTypeId",
+            "MakeActiveView",
+        },
+        "SpaceKartLegendsSystemComponent.cpp",
+    )
+
+
 def main() -> int:
     validate_required_files()
     validate_project_manifest()
     validate_game_content()
     validate_source_registration()
     validate_track_math()
+    validate_gameplay_features()
     print("Space Kart Legends validation passed.")
     return 0
 
