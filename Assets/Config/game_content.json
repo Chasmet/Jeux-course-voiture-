@@ -1,12 +1,14 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "game": {
     "title": "Space Kart Legends",
     "platform": "Android",
     "orientation": "landscape",
     "lapsPerRace": 3,
+    "countdownSeconds": 3.5,
     "localDrivers": 1,
-    "totalDrivers": 4
+    "totalDrivers": 4,
+    "autoAcceleration": true
   },
   "pilots": [
     {
@@ -99,6 +101,43 @@
     {"id": "titan_station", "name": "Station Titan", "difficulty": 4, "theme": "industrial_space_station", "laps": 3},
     {"id": "final_black_hole", "name": "Trou Noir Final", "difficulty": 5, "theme": "black_hole_gravity", "laps": 3}
   ],
+  "items": [
+    {
+      "id": "comet_boost",
+      "displayName": "Turbo Comete",
+      "type": "self_boost",
+      "durationSeconds": 1.85,
+      "preferredPlaces": [3, 4]
+    },
+    {
+      "id": "plasma_shield",
+      "displayName": "Bouclier Plasma",
+      "type": "defense",
+      "durationSeconds": 5.0,
+      "preferredPlaces": [1, 2]
+    },
+    {
+      "id": "gravity_mine",
+      "displayName": "Mine Gravitationnelle",
+      "type": "attack_behind",
+      "spinSeconds": 1.15,
+      "preferredPlaces": [1, 2]
+    },
+    {
+      "id": "photon_pulse",
+      "displayName": "Impulsion Photon",
+      "type": "attack_ahead",
+      "slowSeconds": 1.8,
+      "preferredPlaces": [2, 3, 4]
+    }
+  ],
+  "itemGateProgress": [0.16, 0.41, 0.66, 0.91],
+  "mobileControls": {
+    "steering": "left_half_analog",
+    "item": "top_right",
+    "drift": "middle_right",
+    "brake": "bottom_right"
+  },
   "requiredDriverAnimations": [
     "idle",
     "steer_left",
@@ -120,6 +159,8 @@
     "suspension_compress",
     "suspension_release",
     "boost_flame",
-    "drift_smoke"
+    "drift_smoke",
+    "shield_glow",
+    "item_indicator"
   ]
 }
