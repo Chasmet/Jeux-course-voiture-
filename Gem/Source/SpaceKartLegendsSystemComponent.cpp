@@ -9,6 +9,7 @@
 #include <AzFramework/Entity/GameEntityContextBus.h>
 #include <AzFramework/Input/Devices/Gamepad/InputDeviceGamepad.h>
 #include <AzFramework/Input/Devices/Keyboard/InputDeviceKeyboard.h>
+#include <AzFramework/Input/Devices/Touch/InputDeviceTouch.h>
 
 namespace SpaceKartLegends
 {
@@ -22,13 +23,13 @@ namespace SpaceKartLegends
         if (auto* serializeContext = azrtti_cast<AZ::SerializeContext*>(context))
         {
             serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()
-                ->Version(2);
+                ->Version(3);
 
             if (AZ::EditContext* editContext = serializeContext->GetEditContext())
             {
                 editContext->Class<SpaceKartLegendsSystemComponent>(
                     "Space Kart Legends",
-                    "Systeme de course arcade 3D, IA, circuits et prototype Android.")
+                    "Systeme de course arcade 3D, IA, circuits et commandes Android.")
                     ->ClassElement(AZ::Edit::ClassElements::EditorData, "")
                     ->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC_CE("System"))
                     ->Attribute(AZ::Edit::Attributes::AutoExpand, true);
@@ -66,6 +67,10 @@ namespace SpaceKartLegends
         m_brakePressed = false;
         m_driftPressed = false;
         m_gamepadSteering = 0.0f;
+        m_touchSteering = 0.0f;
+        m_activeDriftTouches = 0;
+        m_activeBrakeTouches = 0;
+        m_touchRoles.fill(TouchRole::None);
         m_race.Reset();
 
         AzFramework::InputChannelEventListener::Connect();
@@ -84,20 +89,24 @@ namespace SpaceKartLegends
         AZ::TickBus::Handler::BusDisconnect();
         AzFramework::InputChannelEventListener::Disconnect();
         m_activeCamera = AZ::EntityId();
+        m_touchRoles.fill(TouchRole::None);
+        m_activeDriftTouches = 0;
+        m_activeBrakeTouches = 0;
     }
 
     void SpaceKartLegendsSystemComponent::OnTick(float deltaTime, [[maybe_unused]] AZ::ScriptTimePoint time)
     {
         ApplyDigitalSteering();
         m_race.SetAccelerating(m_acceleratePressed);
-        m_race.SetBraking(m_brakePressed);
+        m_race.SetBraking(m_brakePressed || m_activeBrakeTouches > 0);
+        m_race.SetDrifting(m_driftPressed || m_activeDriftTouches > 0);
         m_race.Update(deltaTime);
         UpdateCamera();
     }
 
     void SpaceKartLegendsSystemComponent::ApplyDigitalSteering()
     {
-        float steering = m_gamepadSteering;
+        float steering = m_gamepadSteering + m_touchSteering;
         if (m_leftPressed)
         {
             steering -= 1.0f;
@@ -109,8 +118,101 @@ namespace SpaceKartLegends
         m_race.SetSteering(AZStd::max(-1.0f, AZStd::min(1.0f, steering)));
     }
 
+    void SpaceKartLegendsSystemComponent::ReleaseTouchRole(size_t touchIndex)
+    {
+        if (touchIndex >= m_touchRoles.size())
+        {
+            return;
+        }
+
+        switch (m_touchRoles[touchIndex])
+        {
+        case TouchRole::Steering:
+            m_touchSteering = 0.0f;
+            break;
+        case TouchRole::Drift:
+            m_activeDriftTouches = AZStd::max(0, m_activeDriftTouches - 1);
+            break;
+        case TouchRole::Brake:
+            m_activeBrakeTouches = AZStd::max(0, m_activeBrakeTouches - 1);
+            break;
+        case TouchRole::None:
+            break;
+        }
+        m_touchRoles[touchIndex] = TouchRole::None;
+    }
+
+    bool SpaceKartLegendsSystemComponent::HandleTouchInput(const AzFramework::InputChannel& inputChannel)
+    {
+        const auto& touches = AzFramework::InputDeviceTouch::Touch::All;
+        size_t touchIndex = 0;
+        while (touchIndex < touches.size() && touches[touchIndex] != inputChannel.GetInputChannelId())
+        {
+            ++touchIndex;
+        }
+        if (touchIndex >= touches.size() || touchIndex >= m_touchRoles.size())
+        {
+            return false;
+        }
+
+        const auto* positionData = inputChannel.GetCustomData<AzFramework::InputChannel::PositionData2D>();
+        if (!positionData)
+        {
+            return false;
+        }
+
+        if (inputChannel.IsStateEnded())
+        {
+            ReleaseTouchRole(touchIndex);
+            return true;
+        }
+
+        const AZ::Vector2 position = positionData->m_normalizedPosition;
+        const float x = position.GetX();
+        const float y = position.GetY();
+
+        if (inputChannel.IsStateBegan())
+        {
+            ReleaseTouchRole(touchIndex);
+            if (x < 0.55f)
+            {
+                m_touchRoles[touchIndex] = TouchRole::Steering;
+            }
+            else if (y < 0.34f)
+            {
+                m_race.UseBoost();
+                m_touchRoles[touchIndex] = TouchRole::None;
+                return true;
+            }
+            else if (y < 0.78f)
+            {
+                m_touchRoles[touchIndex] = TouchRole::Drift;
+                ++m_activeDriftTouches;
+                return true;
+            }
+            else
+            {
+                m_touchRoles[touchIndex] = TouchRole::Brake;
+                ++m_activeBrakeTouches;
+                return true;
+            }
+        }
+
+        if (m_touchRoles[touchIndex] == TouchRole::Steering)
+        {
+            const float centered = (x - 0.275f) / 0.24f;
+            m_touchSteering = AZStd::max(-1.0f, AZStd::min(1.0f, centered));
+        }
+        return true;
+    }
+
     bool SpaceKartLegendsSystemComponent::OnInputChannelEventFiltered(const AzFramework::InputChannel& inputChannel)
     {
+        if (AzFramework::InputDeviceTouch::IsTouchDevice(inputChannel.GetInputDevice().GetInputDeviceId()))
+        {
+            return HandleTouchInput(inputChannel);
+        }
+
         const AzFramework::InputChannelId& id = inputChannel.GetInputChannelId();
         const bool active = inputChannel.GetState() != AzFramework::InputChannel::State::Ended;
 
@@ -146,7 +248,6 @@ namespace SpaceKartLegends
             id == AzFramework::InputDeviceGamepad::Button::A)
         {
             m_driftPressed = active;
-            m_race.SetDrifting(active);
             return true;
         }
 
