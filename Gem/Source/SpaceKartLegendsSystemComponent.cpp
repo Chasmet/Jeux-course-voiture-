@@ -24,14 +24,12 @@ namespace SpaceKartLegends
     {
         if (auto* serializeContext = azrtti_cast<AZ::SerializeContext*>(context))
         {
-            serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()
-                ->Version(4);
-
+            serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()->Version(5);
             if (AZ::EditContext* editContext = serializeContext->GetEditContext())
             {
                 editContext->Class<SpaceKartLegendsSystemComponent>(
                     "Space Kart Legends",
-                    "Systeme de course arcade 3D, IA, circuits et commandes Android.")
+                    "Course arcade 3D, objets, IA, circuits et commandes Android.")
                     ->ClassElement(AZ::Edit::ClassElements::EditorData, "")
                     ->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC_CE("System"))
                     ->Attribute(AZ::Edit::Attributes::AutoExpand, true);
@@ -146,34 +144,20 @@ namespace SpaceKartLegends
 
         m_activeCamera = cameraId;
         m_ownsActiveCamera = true;
-
-        Camera::CameraRequestBus::Event(
-            m_activeCamera,
-            &Camera::CameraRequestBus::Events::SetFovDegrees,
-            68.0f);
-        Camera::CameraRequestBus::Event(
-            m_activeCamera,
-            &Camera::CameraRequestBus::Events::SetNearClipDistance,
-            0.08f);
-        Camera::CameraRequestBus::Event(
-            m_activeCamera,
-            &Camera::CameraRequestBus::Events::SetFarClipDistance,
-            600.0f);
-        Camera::CameraRequestBus::Event(
-            m_activeCamera,
-            &Camera::CameraRequestBus::Events::MakeActiveView);
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::SetFovDegrees, 68.0f);
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::SetNearClipDistance, 0.08f);
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::SetFarClipDistance, 600.0f);
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::MakeActiveView);
     }
 
     void SpaceKartLegendsSystemComponent::DestroyOwnedCamera()
     {
-        if (!m_ownsActiveCamera || !m_activeCamera.IsValid())
+        if (m_ownsActiveCamera && m_activeCamera.IsValid())
         {
-            return;
+            AzFramework::GameEntityContextRequestBus::Broadcast(
+                &AzFramework::GameEntityContextRequestBus::Events::DestroyGameEntity,
+                m_activeCamera);
         }
-
-        AzFramework::GameEntityContextRequestBus::Broadcast(
-            &AzFramework::GameEntityContextRequestBus::Events::DestroyGameEntity,
-            m_activeCamera);
         m_ownsActiveCamera = false;
     }
 
@@ -190,14 +174,8 @@ namespace SpaceKartLegends
     void SpaceKartLegendsSystemComponent::ApplyDigitalSteering()
     {
         float steering = m_gamepadSteering + m_touchSteering;
-        if (m_leftPressed)
-        {
-            steering -= 1.0f;
-        }
-        if (m_rightPressed)
-        {
-            steering += 1.0f;
-        }
+        steering += m_rightPressed ? 1.0f : 0.0f;
+        steering -= m_leftPressed ? 1.0f : 0.0f;
         m_race.SetSteering(AZStd::max(-1.0f, AZStd::min(1.0f, steering)));
     }
 
@@ -243,17 +221,14 @@ namespace SpaceKartLegends
         {
             return false;
         }
-
         if (inputChannel.IsStateEnded())
         {
             ReleaseTouchRole(touchIndex);
             return true;
         }
 
-        const AZ::Vector2 position = positionData->m_normalizedPosition;
-        const float x = position.GetX();
-        const float y = position.GetY();
-
+        const float x = positionData->m_normalizedPosition.GetX();
+        const float y = positionData->m_normalizedPosition.GetY();
         if (inputChannel.IsStateBegan())
         {
             ReleaseTouchRole(touchIndex);
@@ -263,8 +238,7 @@ namespace SpaceKartLegends
             }
             else if (y < 0.34f)
             {
-                m_race.UseBoost();
-                m_touchRoles[touchIndex] = TouchRole::None;
+                m_race.UseItem();
                 return true;
             }
             else if (y < 0.78f)
@@ -305,63 +279,54 @@ namespace SpaceKartLegends
             m_leftPressed = active;
             return true;
         }
-
         if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericD ||
             id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowRight)
         {
             m_rightPressed = active;
             return true;
         }
-
         if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericW ||
             id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowUp)
         {
             m_acceleratePressed = active;
             return true;
         }
-
         if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericS ||
             id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowDown)
         {
             m_brakePressed = active;
             return true;
         }
-
         if (id == AzFramework::InputDeviceKeyboard::Key::EditSpace ||
             id == AzFramework::InputDeviceGamepad::Button::A)
         {
             m_driftPressed = active;
             return true;
         }
-
         if ((id == AzFramework::InputDeviceKeyboard::Key::AlphanumericB ||
              id == AzFramework::InputDeviceGamepad::Button::B) &&
             inputChannel.GetState() == AzFramework::InputChannel::State::Began)
         {
-            m_race.UseBoost();
+            m_race.UseItem();
             return true;
         }
-
         if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericR &&
             inputChannel.GetState() == AzFramework::InputChannel::State::Began)
         {
             m_race.RecoverPlayer();
             return true;
         }
-
         if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericN &&
             inputChannel.GetState() == AzFramework::InputChannel::State::Began)
         {
             m_race.SelectNextCircuit();
             return true;
         }
-
         if (id == AzFramework::InputDeviceGamepad::ThumbStickAxis1D::LX)
         {
             m_gamepadSteering = inputChannel.GetValue();
             return true;
         }
-
         return false;
     }
 
@@ -382,11 +347,7 @@ namespace SpaceKartLegends
             cameraPosition,
             cameraTarget,
             AZ::Transform::Axis::YPositive);
-
-        AZ::TransformBus::Event(
-            m_activeCamera,
-            &AZ::TransformBus::Events::SetWorldTM,
-            cameraTransform);
+        AZ::TransformBus::Event(m_activeCamera, &AZ::TransformBus::Events::SetWorldTM, cameraTransform);
     }
 
     void SpaceKartLegendsSystemComponent::DisplayViewport(
