@@ -26,8 +26,8 @@ on:
 permissions:
   contents: read
 
-# The O3DE engine and Android toolchain are too large for a reliable clean
-# install on a small hosted runner. This workflow uses a prepared build runner.
+# O3DE and its Android toolchain require a prepared build machine. The job
+# deliberately fails instead of publishing an archive when no real APK exists.
 jobs:
   build-apk:
     runs-on: [self-hosted, Linux, X64, o3de-26.05, android]
@@ -45,17 +45,25 @@ jobs:
         with:
           lfs: true
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Generate pilot and kart blockout models
         run: python3 scripts/generate_blockout_assets.py
 
-      - name: Validate project and generated models
-        run: python3 scripts/validate_project.py
+      - name: Validate project, assets and Android startup files
+        run: |
+          python3 scripts/validate_project.py
+          python3 scripts/validate_android_scaffold.py
 
       - name: Verify Android and O3DE tools
         shell: bash
         run: |
           set -euo pipefail
           test -x "$O3DE_ENGINE_PATH/scripts/o3de.sh"
+          test -f "$O3DE_ENGINE_PATH/scripts/o3de/ExportScripts/export_source_android.py"
           test -n "${ANDROID_SDK_ROOT:-}"
           command -v java
           command -v gradle
@@ -73,11 +81,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "sdk.root=$ANDROID_SDK_ROOT"
-          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "platform.sdk.api=34"
-          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "ndk.version=25.*"
-          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --set-value "android.gradle.plugin=8.1"
-          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --global --validate
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "sdk.root=$ANDROID_SDK_ROOT"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "platform.sdk.api=34"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "ndk.version=25.*"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "android.gradle.plugin=8.1.0"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "asset.mode=$ASSET_MODE"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --validate
 
       - name: Export O3DE Android project and build APK
         shell: bash
@@ -85,10 +94,10 @@ jobs:
           set -euo pipefail
           rm -rf "$ANDROID_BUILD_PATH"
           "$O3DE_ENGINE_PATH/scripts/o3de.sh" export-project \
-            -es export_source_android.py \
-            -pp "$GITHUB_WORKSPACE" \
-            -abp "$ANDROID_BUILD_PATH" \
-            -ll INFO \
+            --export-script "$O3DE_ENGINE_PATH/scripts/o3de/ExportScripts/export_source_android.py" \
+            --project-path "$GITHUB_WORKSPACE" \
+            --android-build-path "$ANDROID_BUILD_PATH" \
+            --log-level INFO \
             --config "$BUILD_CONFIGURATION" \
             --asset-mode "$ASSET_MODE"
 
@@ -98,14 +107,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK_PATH="$(find "$ANDROID_BUILD_PATH" -type f -name '*.apk' | head -n 1)"
+          APK_PATH="$(find "$ANDROID_BUILD_PATH" -type f -name '*.apk' ! -name '*unaligned*' | sort | head -n 1)"
           if [ -z "$APK_PATH" ]; then
             echo "No APK produced by the O3DE export." >&2
             exit 1
           fi
-          cp "$APK_PATH" "dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk"
-          sha256sum "dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk" | tee dist/SHA256SUMS.txt
-          echo "path=dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk" >> "$GITHUB_OUTPUT"
+          OUTPUT_APK="dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk"
+          cp "$APK_PATH" "$OUTPUT_APK"
+          test -s "$OUTPUT_APK"
+          sha256sum "$OUTPUT_APK" | tee dist/SHA256SUMS.txt
+          echo "path=$OUTPUT_APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@v4
