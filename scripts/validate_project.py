@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fast repository validation for Space Kart Legends.
 
-This check intentionally does not pretend to compile O3DE. It validates the
-project manifests, expected content, source registration and the critical track
-math that previously caused infinite recursion.
+This check validates manifests, generated blockout assets, source registration
+and the critical track math. It deliberately does not claim to replace a real
+O3DE CMake/Android build.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ REQUIRED_FILES = [
     "Gem/Source/SpaceKartLegendsSystemComponent.cpp",
     "Gem/Source/SpaceKartLegendsModule.cpp",
     "Assets/Config/game_content.json",
+    "scripts/generate_blockout_assets.py",
 ]
 
 EXPECTED_PILOTS = {"cheikh", "yvane", "nelvyn", "nova"}
@@ -85,8 +86,25 @@ def validate_project_manifest() -> None:
         fail("project.json is missing gems: " + ", ".join(missing_gems))
 
 
+def validate_generated_gltf(relative_path: str) -> None:
+    path = ROOT / "Assets" / relative_path
+    if not path.is_file():
+        fail(f"generated blockout asset is missing: Assets/{relative_path}")
+    document = load_json(str(path.relative_to(ROOT)))
+    if document.get("asset", {}).get("version") != "2.0":
+        fail(f"invalid glTF version in Assets/{relative_path}")
+    if not document.get("meshes") or not document.get("buffers"):
+        fail(f"incomplete glTF model in Assets/{relative_path}")
+    uri = document["buffers"][0].get("uri", "")
+    if not uri.startswith("data:application/octet-stream;base64,"):
+        fail(f"blockout glTF must embed its geometry: Assets/{relative_path}")
+
+
 def validate_game_content() -> None:
     content = load_json("Assets/Config/game_content.json")
+    if content.get("schemaVersion") != 2:
+        fail("game_content schemaVersion must be 2")
+
     pilots = content.get("pilots", [])
     pilot_ids = {pilot.get("id") for pilot in pilots}
     if pilot_ids != EXPECTED_PILOTS:
@@ -102,10 +120,23 @@ def validate_game_content() -> None:
     if missing_animations:
         fail("missing driver animations: " + ", ".join(missing_animations))
 
-    kart_ids = {kart.get("id") for kart in content.get("karts", [])}
+    karts = content.get("karts", [])
+    kart_ids = {kart.get("id") for kart in karts}
     for pilot in pilots:
         if pilot.get("kartId") not in kart_ids:
             fail(f"pilot {pilot.get('id')} references an unknown kart")
+        blockout = pilot.get("blockoutModelPath")
+        production = pilot.get("productionModelPath")
+        if not blockout or not production or not production.endswith(".fbx"):
+            fail(f"pilot {pilot.get('id')} has incomplete model paths")
+        validate_generated_gltf(blockout)
+
+    for kart in karts:
+        blockout = kart.get("blockoutModelPath")
+        production = kart.get("productionModelPath")
+        if not blockout or not production or not production.endswith(".fbx"):
+            fail(f"kart {kart.get('id')} has incomplete model paths")
+        validate_generated_gltf(blockout)
 
 
 def validate_source_registration() -> None:
