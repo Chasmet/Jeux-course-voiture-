@@ -49,6 +49,8 @@ namespace SpaceKartLegends
         SpaceKartRace m_race;
         bool m_leftPressed = false;
         bool m_rightPressed = false;
+        bool m_acceleratePressed = true;
+        bool m_brakePressed = false;
         bool m_driftPressed = false;
         float m_gamepadSteering = 0.0f;
         AZ::EntityId m_activeCamera;
