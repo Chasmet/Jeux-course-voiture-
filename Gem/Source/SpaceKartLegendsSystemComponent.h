@@ -52,6 +52,8 @@ namespace SpaceKartLegends
             Brake
         };
 
+        void EnsureActiveCamera();
+        void DestroyOwnedCamera();
         void UpdateCamera();
         void ApplyDigitalSteering();
         bool HandleTouchInput(const AzFramework::InputChannel& inputChannel);
@@ -69,5 +71,6 @@ namespace SpaceKartLegends
         int m_activeBrakeTouches = 0;
         AZStd::array<TouchRole, 10> m_touchRoles{};
         AZ::EntityId m_activeCamera;
+        bool m_ownsActiveCamera = false;
     };
 }
