@@ -24,7 +24,7 @@ namespace SpaceKartLegends
     {
         if (auto* serializeContext = azrtti_cast<AZ::SerializeContext*>(context))
         {
-            serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()->Version(5);
+            serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()->Version(6);
             if (AZ::EditContext* editContext = serializeContext->GetEditContext())
             {
                 editContext->Class<SpaceKartLegendsSystemComponent>(
@@ -168,6 +168,7 @@ namespace SpaceKartLegends
         m_race.SetBraking(m_brakePressed || m_activeBrakeTouches > 0);
         m_race.SetDrifting(m_driftPressed || m_activeDriftTouches > 0);
         m_race.Update(deltaTime);
+        m_race.RefreshPickupTargets();
         UpdateCamera();
     }
 
