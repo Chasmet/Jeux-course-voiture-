@@ -28,6 +28,8 @@ REQUIRED_FILES = [
     "Gem/Source/SpaceKartLegendsModule.cpp",
     "Assets/Config/game_content.json",
     "scripts/generate_blockout_assets.py",
+    "scripts/generate_environment_assets.py",
+    "scripts/validate_environment_assets.py",
     "Docs/ASSET_PIPELINE.md",
 ]
 
@@ -115,14 +117,16 @@ def validate_generated_gltf(relative_path: str) -> None:
 
 def validate_game_content() -> None:
     content = load_json("Assets/Config/game_content.json")
-    if content.get("schemaVersion") != 3:
-        fail("game_content schemaVersion must be 3")
+    if content.get("schemaVersion") != 4:
+        fail("game_content schemaVersion must be 4")
 
     game = content.get("game", {})
     if game.get("lapsPerRace") != 3 or game.get("countdownSeconds") != 3.5:
         fail("race configuration must use three laps and a 3.5 second countdown")
     if game.get("autoAcceleration") is not True:
         fail("Android arcade controls require autoAcceleration")
+    if game.get("startupLevel") != "spacekartlegends":
+        fail("game_content startupLevel must be spacekartlegends")
 
     pilots = content.get("pilots", [])
     pilot_ids = {pilot.get("id") for pilot in pilots}
@@ -134,7 +138,8 @@ def validate_game_content() -> None:
     if circuit_ids != EXPECTED_CIRCUITS:
         fail(f"circuit ids mismatch: {sorted(circuit_ids)}")
 
-    item_ids = {item.get("id") for item in content.get("items", [])}
+    items = content.get("items", [])
+    item_ids = {item.get("id") for item in items}
     if item_ids != EXPECTED_ITEMS:
         fail(f"item ids mismatch: {sorted(item_ids)}")
     gates = content.get("itemGateProgress", [])
@@ -167,6 +172,20 @@ def validate_game_content() -> None:
         production = kart.get("productionModelPath")
         if not blockout or not production or not production.endswith(".fbx"):
             fail(f"kart {kart.get('id')} has incomplete model paths")
+        validate_generated_gltf(blockout)
+
+    for circuit in circuits:
+        blockout = circuit.get("blockoutModelPath")
+        production = circuit.get("productionPrefabPath")
+        if not blockout or not production or not production.endswith(".prefab"):
+            fail(f"circuit {circuit.get('id')} has incomplete asset paths")
+        validate_generated_gltf(blockout)
+
+    for item in items:
+        blockout = item.get("blockoutModelPath")
+        production = item.get("productionModelPath")
+        if not blockout or not production or not production.endswith(".fbx"):
+            fail(f"item {item.get('id')} has incomplete model paths")
         validate_generated_gltf(blockout)
 
 
