@@ -50,12 +50,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generate pilot and kart blockout models
-        run: python3 scripts/generate_blockout_assets.py
+      - name: Generate all blockout models
+        run: |
+          python3 scripts/generate_blockout_assets.py
+          python3 scripts/generate_environment_assets.py
 
-      - name: Validate project, assets and Android startup files
+      - name: Validate project, generated geometry and Android startup files
         run: |
           python3 scripts/validate_project.py
+          python3 scripts/validate_environment_assets.py
           python3 scripts/validate_android_scaffold.py
 
       - name: Verify Android and O3DE tools
