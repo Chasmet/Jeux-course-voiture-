@@ -1,9 +1,10 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "game": {
     "title": "Space Kart Legends",
     "platform": "Android",
     "orientation": "landscape",
+    "startupLevel": "spacekartlegends",
     "lapsPerRace": 3,
     "countdownSeconds": 3.5,
     "localDrivers": 1,
@@ -95,11 +96,51 @@
     }
   ],
   "circuits": [
-    {"id": "orbit_zero", "name": "Orbite Zero", "difficulty": 1, "theme": "orbital_training", "laps": 3},
-    {"id": "saturn_rings", "name": "Anneaux de Saturne", "difficulty": 2, "theme": "saturn_ice_and_dust", "laps": 3},
-    {"id": "turbo_nebula", "name": "Nebuleuse Turbo", "difficulty": 3, "theme": "neon_nebula", "laps": 3},
-    {"id": "titan_station", "name": "Station Titan", "difficulty": 4, "theme": "industrial_space_station", "laps": 3},
-    {"id": "final_black_hole", "name": "Trou Noir Final", "difficulty": 5, "theme": "black_hole_gravity", "laps": 3}
+    {
+      "id": "orbit_zero",
+      "name": "Orbite Zero",
+      "difficulty": 1,
+      "theme": "orbital_training",
+      "laps": 3,
+      "blockoutModelPath": "Blockout/Tracks/OrbitZero/orbit_zero_track.gltf",
+      "productionPrefabPath": "Tracks/OrbitZero/orbit_zero.prefab"
+    },
+    {
+      "id": "saturn_rings",
+      "name": "Anneaux de Saturne",
+      "difficulty": 2,
+      "theme": "saturn_ice_and_dust",
+      "laps": 3,
+      "blockoutModelPath": "Blockout/Tracks/SaturnRings/saturn_rings_track.gltf",
+      "productionPrefabPath": "Tracks/SaturnRings/saturn_rings.prefab"
+    },
+    {
+      "id": "turbo_nebula",
+      "name": "Nebuleuse Turbo",
+      "difficulty": 3,
+      "theme": "neon_nebula",
+      "laps": 3,
+      "blockoutModelPath": "Blockout/Tracks/TurboNebula/turbo_nebula_track.gltf",
+      "productionPrefabPath": "Tracks/TurboNebula/turbo_nebula.prefab"
+    },
+    {
+      "id": "titan_station",
+      "name": "Station Titan",
+      "difficulty": 4,
+      "theme": "industrial_space_station",
+      "laps": 3,
+      "blockoutModelPath": "Blockout/Tracks/TitanStation/titan_station_track.gltf",
+      "productionPrefabPath": "Tracks/TitanStation/titan_station.prefab"
+    },
+    {
+      "id": "final_black_hole",
+      "name": "Trou Noir Final",
+      "difficulty": 5,
+      "theme": "black_hole_gravity",
+      "laps": 3,
+      "blockoutModelPath": "Blockout/Tracks/FinalBlackHole/final_black_hole_track.gltf",
+      "productionPrefabPath": "Tracks/FinalBlackHole/final_black_hole.prefab"
+    }
   ],
   "items": [
     {
@@ -107,28 +148,36 @@
       "displayName": "Turbo Comete",
       "type": "self_boost",
       "durationSeconds": 1.85,
-      "preferredPlaces": [3, 4]
+      "preferredPlaces": [3, 4],
+      "blockoutModelPath": "Blockout/Items/CometBoost/comet_boost.gltf",
+      "productionModelPath": "Items/CometBoost/comet_boost.fbx"
     },
     {
       "id": "plasma_shield",
       "displayName": "Bouclier Plasma",
       "type": "defense",
       "durationSeconds": 5.0,
-      "preferredPlaces": [1, 2]
+      "preferredPlaces": [1, 2],
+      "blockoutModelPath": "Blockout/Items/PlasmaShield/plasma_shield.gltf",
+      "productionModelPath": "Items/PlasmaShield/plasma_shield.fbx"
     },
     {
       "id": "gravity_mine",
       "displayName": "Mine Gravitationnelle",
       "type": "attack_behind",
       "spinSeconds": 1.15,
-      "preferredPlaces": [1, 2]
+      "preferredPlaces": [1, 2],
+      "blockoutModelPath": "Blockout/Items/GravityMine/gravity_mine.gltf",
+      "productionModelPath": "Items/GravityMine/gravity_mine.fbx"
     },
     {
       "id": "photon_pulse",
       "displayName": "Impulsion Photon",
       "type": "attack_ahead",
       "slowSeconds": 1.8,
-      "preferredPlaces": [2, 3, 4]
+      "preferredPlaces": [2, 3, 4],
+      "blockoutModelPath": "Blockout/Items/PhotonPulse/photon_pulse.gltf",
+      "productionModelPath": "Items/PhotonPulse/photon_pulse.fbx"
     }
   ],
   "itemGateProgress": [0.16, 0.41, 0.66, 0.91],
