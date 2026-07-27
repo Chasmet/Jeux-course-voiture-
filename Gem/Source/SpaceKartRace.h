@@ -33,6 +33,7 @@ namespace SpaceKartLegends
         float m_speed = 0.0f;
         float m_boostTime = 0.0f;
         float m_driftCharge = 0.0f;
+        float m_airTime = 0.0f;
         int m_lap = 1;
         int m_place = 1;
         bool m_finished = false;
@@ -51,6 +52,8 @@ namespace SpaceKartLegends
         void Update(float deltaTime);
 
         void SetSteering(float steering);
+        void SetAccelerating(bool accelerating);
+        void SetBraking(bool braking);
         void SetDrifting(bool drifting);
         void UseBoost();
         void RecoverPlayer();
@@ -76,6 +79,7 @@ namespace SpaceKartLegends
         void DrawKart(AzFramework::DebugDisplayRequests& debugDisplay, const DriverState& driver, int driverIndex) const;
         void DrawSpaceEnvironment(AzFramework::DebugDisplayRequests& debugDisplay) const;
 
+        AZ::Vector3 GetCenterlinePosition(float progress) const;
         static float WrapProgress(float progress);
         static float RaceScore(const DriverState& driver);
 
@@ -83,6 +87,8 @@ namespace SpaceKartLegends
         AZStd::array<DriverState, DriverCount> m_drivers;
         int m_circuitIndex = 0;
         float m_steering = 0.0f;
+        bool m_accelerating = true;
+        bool m_braking = false;
         bool m_drifting = false;
         float m_elapsedTime = 0.0f;
     };
