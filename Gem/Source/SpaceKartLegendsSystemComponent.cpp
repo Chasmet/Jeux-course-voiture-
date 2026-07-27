@@ -25,7 +25,7 @@ namespace SpaceKartLegends
     {
         if (auto* serializeContext = azrtti_cast<AZ::SerializeContext*>(context))
         {
-            serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()->Version(7);
+            serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()->Version(8);
             if (AZ::EditContext* editContext = serializeContext->GetEditContext())
             {
                 editContext->Class<SpaceKartLegendsSystemComponent>(
@@ -261,6 +261,10 @@ namespace SpaceKartLegends
     {
         if (m_frontendState == FrontendState::Racing || m_frontendState == FrontendState::Results)
         {
+            if (m_frontendState == FrontendState::Results && m_resultHandled)
+            {
+                m_championshipPoints = AZStd::max(0, m_championshipPoints - m_lastRacePoints);
+            }
             m_lastRacePoints = 0;
             m_resultHandled = false;
             m_race.Reset(m_currentCircuit);
@@ -561,6 +565,7 @@ namespace SpaceKartLegends
             debugDisplay.Draw2dTextLabel(0.50f, 0.51f, 1.30f, total.c_str(), true);
             debugDisplay.Draw2dTextLabel(0.50f, 0.63f, 1.15f, next.c_str(), true);
             debugDisplay.Draw2dTextLabel(0.50f, 0.78f, 1.05f, "Touchez l'ecran ou appuyez sur Entree", true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.87f, 0.90f, "R : recommencer sans doubler les points", true);
             return;
         }
 
