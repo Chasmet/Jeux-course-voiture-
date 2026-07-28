@@ -126,10 +126,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          mkdir -p dist
+          mkdir -p "$GITHUB_WORKSPACE/dist"
           GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          APK="$GITHUB_WORKSPACE/dist/SpaceKartLegends-Godot-debug.apk"
           set +e
-          "$GODOT" --headless --path godot --export-debug Android dist/SpaceKartLegends-Godot-debug.apk 2>&1 | tee godot-export.log
+          "$GODOT" --headless --path godot --export-debug Android "$APK" 2>&1 | tee godot-export.log
           EXPORT_STATUS=${PIPESTATUS[0]}
           set -e
           tail -n 180 godot-export.log || true
@@ -137,7 +138,6 @@ jobs:
             echo "Godot Android export command failed with status $EXPORT_STATUS." >&2
             exit "$EXPORT_STATUS"
           fi
-          APK="dist/SpaceKartLegends-Godot-debug.apk"
           test -s "$APK"
           unzip -t "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee dist/SIGNATURE.txt
