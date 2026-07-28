@@ -147,19 +147,34 @@ jobs:
             --config "$BUILD_CONFIGURATION" \
             --asset-mode "$ASSET_MODE"
 
-      - name: Verify private pilots were processed by O3DE
+      - name: Verify private pilots were converted to runtime products
         shell: bash
         run: |
           set -euo pipefail
           SEARCH_ROOTS=("$ANDROID_BUILD_PATH" "$GITHUB_WORKSPACE/Cache")
           for pilot in cheikh yvane nelvyn; do
-            if ! find "${SEARCH_ROOTS[@]}" -type f \
-              \( -iname "*${pilot}*.actor" -o -iname "*${pilot}*.azmodel" -o -iname "*${pilot}*.glb" \) \
-              -print -quit 2>/dev/null | grep -q .; then
-              echo "O3DE did not process the private model for ${pilot}." >&2
+            PRODUCT="$(find "${SEARCH_ROOTS[@]}" -type f \
+              \( -iname "*${pilot}*.actor" -o -iname "*${pilot}*.azmodel" \) \
+              -print -quit 2>/dev/null || true)"
+            if [ -z "$PRODUCT" ]; then
+              echo "No processed O3DE runtime product found for ${pilot}. Raw GLB presence is not sufficient." >&2
               exit 1
             fi
+            test -s "$PRODUCT"
+            echo "Verified processed pilot product: $PRODUCT"
           done
+
+      - name: Reject raw personal media from build outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_MEDIA="$(find "$ANDROID_BUILD_PATH" "$GITHUB_WORKSPACE/Cache" -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.mp4' -o -iname '*.mov' \) \
+            -print -quit 2>/dev/null || true)"
+          if [ -n "$RAW_MEDIA" ]; then
+            echo "Raw personal media leaked into build output: $RAW_MEDIA" >&2
+            exit 1
+          fi
 
       - name: Collect and verify APK
         id: apk
