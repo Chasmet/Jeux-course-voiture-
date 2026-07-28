@@ -2,9 +2,9 @@
 extends SceneTree
 
 func _initialize() -> void:
-	var settings = EditorSettings.get_singleton()
+	var settings = EditorInterface.get_editor_settings()
 	if settings == null:
-		printerr("EditorSettings singleton is unavailable")
+		printerr("EditorSettings instance is unavailable")
 		quit(1)
 		return
 
