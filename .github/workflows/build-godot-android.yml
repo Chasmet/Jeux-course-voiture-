@@ -87,7 +87,7 @@ jobs:
             echo "PRIVATE_MODELS=0" >> "$GITHUB_ENV"
           fi
 
-      - name: Create debug keystore and configure Godot EditorSettings
+      - name: Create debug keystore and canonical Godot 4 editor settings
         shell: bash
         run: |
           set -euo pipefail
@@ -99,11 +99,17 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-          GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
-          "$GODOT" --headless --editor --path godot \
-            --script res://tools/configure_android_editor.gd 2>&1 | tee android-editor-settings.txt
-          grep -F "Configured Android SDK: $ANDROID_HOME" android-editor-settings.txt
-          grep -F "Configured Java SDK: $JAVA_HOME" android-editor-settings.txt
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          cat "$HOME/.config/godot/editor_settings-4.tres" | tee android-editor-settings.txt
 
       - name: Import Godot project and validate scripts
         shell: bash
@@ -118,13 +124,8 @@ jobs:
 
       - name: Export real Godot Android APK
         shell: bash
-        env:
-          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ github.workspace }}/.android-debug.keystore
-          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
-          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           set -o pipefail
-          cp "$HOME/.android/debug.keystore" .android-debug.keystore
           mkdir -p dist
           GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
           set +e
