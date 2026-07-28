@@ -9,6 +9,12 @@ on:
       - "scripts/generate_standalone_android_project.py"
       - "scripts/android_project_payload/**"
       - ".github/workflows/build-turnkey-android.yml"
+  pull_request:
+    paths:
+      - "android-standalone/**"
+      - "scripts/generate_standalone_android_project.py"
+      - "scripts/android_project_payload/**"
+      - ".github/workflows/build-turnkey-android.yml"
   workflow_dispatch:
 
 permissions:
