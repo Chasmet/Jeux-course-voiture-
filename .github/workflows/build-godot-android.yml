@@ -1,0 +1,147 @@
+name: Build Godot Android APK
+
+on:
+  push:
+    branches:
+      - agent/godot-space-kart-v1
+    paths:
+      - "godot/**"
+      - ".github/workflows/build-godot-android.yml"
+  pull_request:
+    paths:
+      - "godot/**"
+      - ".github/workflows/build-godot-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GODOT_VERSION: "4.6.3"
+      GODOT_STATUS: "stable"
+      PRIVATE_CHARACTER_PACK_B64: ${{ secrets.PRIVATE_CHARACTER_PACK_B64 }}
+
+    steps:
+      - name: Checkout Godot migration branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK 34
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Download official Godot editor and Android export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_STATUS}"
+          curl -fL --retry 5 -o godot-editor.zip \
+            "$BASE/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip"
+          curl -fL --retry 5 -o godot-templates.tpz \
+            "$BASE/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz"
+          unzip -q godot-editor.zip -d godot-bin
+          chmod +x godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
+          unzip -q godot-templates.tpz -d template-unpack
+          cp -a template-unpack/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
+          godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64 --version
+
+      - name: Install private Cheikh Yvane Nelvyn models when secret is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${PRIVATE_CHARACTER_PACK_B64:-}" ]; then
+            printf '%s' "$PRIVATE_CHARACTER_PACK_B64" | base64 --decode > private-pilots.zip
+            unzip -t private-pilots.zip >/dev/null
+            python3 godot/tools/install_private_pack.py private-pilots.zip
+            test -s godot/private_models/cheikh.glb
+            test -s godot/private_models/yvane.glb
+            test -s godot/private_models/nelvyn.glb
+            echo "PRIVATE_MODELS=1" >> "$GITHUB_ENV"
+          else
+            echo "Private model secret is absent; procedural pilot fallbacks will be used for this public CI build."
+            echo "PRIVATE_MODELS=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure Godot Android editor settings and debug keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot" "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          cat > "$HOME/.config/godot/editor_settings-4.6.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+
+      - name: Import Godot project and validate scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          "$GODOT" --headless --editor --path godot --quit-after 30 --verbose 2>&1 | tee godot-import.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" godot-import.log; then
+            echo "Godot script validation failed." >&2
+            exit 1
+          fi
+
+      - name: Export real Godot Android APK
+        shell: bash
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ github.workspace }}/.android-debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          set -euo pipefail
+          cp "$HOME/.android/debug.keystore" .android-debug.keystore
+          mkdir -p dist
+          GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          "$GODOT" --headless --path godot --export-debug Android dist/SpaceKartLegends-Godot-debug.apk 2>&1 | tee godot-export.log
+          APK="dist/SpaceKartLegends-Godot-debug.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK" | tee dist/SIGNATURE.txt
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -P 16 -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | tee dist/BADGING.txt
+          grep -F "package: name='com.chasmet.spacekartlegends'" dist/BADGING.txt
+          sha256sum "$APK" | tee dist/SHA256SUMS.txt
+          printf 'private_models=%s\n' "$PRIVATE_MODELS" > dist/BUILD_VARIANT.txt
+
+      - name: Upload Godot APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-Godot-Android
+          path: |
+            dist/SpaceKartLegends-Godot-debug.apk
+            dist/SHA256SUMS.txt
+            dist/SIGNATURE.txt
+            dist/BADGING.txt
+            dist/BUILD_VARIANT.txt
+            godot-import.log
+            godot-export.log
+          if-no-files-found: error
+          retention-days: 30
