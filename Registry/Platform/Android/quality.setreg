@@ -1,0 +1,17 @@
+{
+  "O3DE": {
+    "Quality": {
+      "Groups": {
+        "q_general": {
+          "Default": 1
+        },
+        "q_graphics": {
+          "Default": 1,
+          "Settings": {
+            "r_renderScale": [0.7, 0.82, 0.92, 1.0]
+          }
+        }
+      }
+    }
+  }
+}

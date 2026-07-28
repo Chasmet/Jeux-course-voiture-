@@ -1,0 +1,51 @@
+{
+  "ContainerEntity": {
+    "Id": "Entity_[7100000000001]",
+    "Name": "SpaceKartLegends",
+    "Components": {
+      "Component_[7100000000101]": {
+        "$type": "EditorInspectorComponent",
+        "Id": 7100000000101
+      },
+      "Component_[7100000000102]": {
+        "$type": "EditorOnlyEntityComponent",
+        "Id": 7100000000102
+      },
+      "Component_[7100000000103]": {
+        "$type": "EditorPendingCompositionComponent",
+        "Id": 7100000000103
+      },
+      "Component_[7100000000104]": {
+        "$type": "EditorEntitySortComponent",
+        "Id": 7100000000104,
+        "Child Entity Order": []
+      },
+      "Component_[7100000000105]": {
+        "$type": "{27F1E1A1-8D9D-4C3B-BD3A-AFB9762449C0} TransformComponent",
+        "Id": 7100000000105,
+        "Parent Entity": ""
+      },
+      "Component_[7100000000106]": {
+        "$type": "EditorDisabledCompositionComponent",
+        "Id": 7100000000106
+      },
+      "Component_[7100000000107]": {
+        "$type": "EditorEntityIconComponent",
+        "Id": 7100000000107
+      },
+      "Component_[7100000000108]": {
+        "$type": "EditorPrefabComponent",
+        "Id": 7100000000108
+      },
+      "Component_[7100000000109]": {
+        "$type": "EditorLockComponent",
+        "Id": 7100000000109
+      },
+      "Component_[7100000000110]": {
+        "$type": "EditorVisibilityComponent",
+        "Id": 7100000000110
+      }
+    }
+  },
+  "Entities": {}
+}

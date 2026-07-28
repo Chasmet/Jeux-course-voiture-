@@ -1,0 +1,608 @@
+#include "SpaceKartLegendsSystemComponent.h"
+
+#include <AzCore/Component/Entity.h>
+#include <AzCore/Component/TransformBus.h>
+#include <AzCore/Math/Transform.h>
+#include <AzCore/Serialization/EditContext.h>
+#include <AzCore/Serialization/SerializeContext.h>
+#include <AzCore/std/algorithm.h>
+#include <AzCore/std/string/string.h>
+#include <AzFramework/Components/CameraBus.h>
+#include <AzFramework/Components/TransformComponent.h>
+#include <AzFramework/Entity/GameEntityContextBus.h>
+#include <AzFramework/Input/Devices/Gamepad/InputDeviceGamepad.h>
+#include <AzFramework/Input/Devices/Keyboard/InputDeviceKeyboard.h>
+#include <AzFramework/Input/Devices/Touch/InputDeviceTouch.h>
+
+namespace SpaceKartLegends
+{
+    SpaceKartLegendsSystemComponent::SpaceKartLegendsSystemComponent()
+        : AzFramework::InputChannelEventListener(AzFramework::InputChannelEventListener::GetPriorityDefault())
+    {
+    }
+
+    void SpaceKartLegendsSystemComponent::Reflect(AZ::ReflectContext* context)
+    {
+        if (auto* serializeContext = azrtti_cast<AZ::SerializeContext*>(context))
+        {
+            serializeContext->Class<SpaceKartLegendsSystemComponent, AZ::Component>()->Version(8);
+            if (AZ::EditContext* editContext = serializeContext->GetEditContext())
+            {
+                editContext->Class<SpaceKartLegendsSystemComponent>(
+                    "Space Kart Legends",
+                    "Course arcade 3D, selection de pilote, championnat, objets et commandes Android.")
+                    ->ClassElement(AZ::Edit::ClassElements::EditorData, "")
+                    ->Attribute(AZ::Edit::Attributes::AppearsInAddComponentMenu, AZ_CRC_CE("System"))
+                    ->Attribute(AZ::Edit::Attributes::AutoExpand, true);
+            }
+        }
+    }
+
+    void SpaceKartLegendsSystemComponent::GetProvidedServices(AZ::ComponentDescriptor::DependencyArrayType& provided)
+    {
+        provided.push_back(AZ_CRC_CE("SpaceKartLegendsService"));
+    }
+
+    void SpaceKartLegendsSystemComponent::GetIncompatibleServices(AZ::ComponentDescriptor::DependencyArrayType& incompatible)
+    {
+        incompatible.push_back(AZ_CRC_CE("SpaceKartLegendsService"));
+    }
+
+    void SpaceKartLegendsSystemComponent::GetRequiredServices([[maybe_unused]] AZ::ComponentDescriptor::DependencyArrayType& required)
+    {
+    }
+
+    void SpaceKartLegendsSystemComponent::GetDependentServices([[maybe_unused]] AZ::ComponentDescriptor::DependencyArrayType& dependent)
+    {
+    }
+
+    void SpaceKartLegendsSystemComponent::Init()
+    {
+    }
+
+    void SpaceKartLegendsSystemComponent::ResetInputState()
+    {
+        m_leftPressed = false;
+        m_rightPressed = false;
+        m_acceleratePressed = true;
+        m_brakePressed = false;
+        m_driftPressed = false;
+        m_gamepadSteering = 0.0f;
+        m_touchSteering = 0.0f;
+        m_activeDriftTouches = 0;
+        m_activeBrakeTouches = 0;
+        m_touchRoles.fill(TouchRole::None);
+        m_race.SetSteering(0.0f);
+        m_race.SetBraking(false);
+        m_race.SetDrifting(false);
+    }
+
+    void SpaceKartLegendsSystemComponent::Activate()
+    {
+        ResetInputState();
+        m_frontendState = FrontendState::PilotSelection;
+        m_currentCircuit = 0;
+        m_championshipPoints = 0;
+        m_lastRacePoints = 0;
+        m_resultHandled = false;
+        m_activeCamera = AZ::EntityId();
+        m_ownsActiveCamera = false;
+        m_race.Reset(0);
+
+        AzFramework::InputChannelEventListener::Connect();
+        AZ::TickBus::Handler::BusConnect();
+
+        AzFramework::EntityContextId gameContextId = AzFramework::EntityContextId::CreateNull();
+        AzFramework::GameEntityContextRequestBus::BroadcastResult(
+            gameContextId,
+            &AzFramework::GameEntityContextRequestBus::Events::GetGameEntityContextId);
+        AzFramework::ViewportDebugDisplayEventBus::Handler::BusConnect(gameContextId);
+
+        EnsureActiveCamera();
+        UpdateCamera();
+    }
+
+    void SpaceKartLegendsSystemComponent::Deactivate()
+    {
+        AzFramework::ViewportDebugDisplayEventBus::Handler::BusDisconnect();
+        AZ::TickBus::Handler::BusDisconnect();
+        AzFramework::InputChannelEventListener::Disconnect();
+        DestroyOwnedCamera();
+        m_activeCamera = AZ::EntityId();
+        ResetInputState();
+    }
+
+    void SpaceKartLegendsSystemComponent::EnsureActiveCamera()
+    {
+        if (m_activeCamera.IsValid())
+        {
+            return;
+        }
+
+        Camera::CameraSystemRequestBus::BroadcastResult(
+            m_activeCamera,
+            &Camera::CameraSystemRequestBus::Events::GetActiveCamera);
+        if (m_activeCamera.IsValid())
+        {
+            m_ownsActiveCamera = false;
+            return;
+        }
+
+        AZ::Entity* cameraEntity = nullptr;
+        AzFramework::GameEntityContextRequestBus::BroadcastResult(
+            cameraEntity,
+            &AzFramework::GameEntityContextRequestBus::Events::CreateGameEntity,
+            "SpaceKartGameplayCamera");
+        if (!cameraEntity)
+        {
+            return;
+        }
+
+        const AZ::EntityId cameraId = cameraEntity->GetId();
+        AZ::Component* transformComponent = cameraEntity->CreateComponent<AzFramework::TransformComponent>();
+        AZ::Component* cameraComponent = cameraEntity->CreateComponent(Camera::CameraComponentTypeId);
+        if (!transformComponent || !cameraComponent)
+        {
+            AzFramework::GameEntityContextRequestBus::Broadcast(
+                &AzFramework::GameEntityContextRequestBus::Events::DestroyGameEntity,
+                cameraId);
+            return;
+        }
+
+        cameraEntity->Init();
+        AzFramework::GameEntityContextRequestBus::Broadcast(
+            &AzFramework::GameEntityContextRequestBus::Events::ActivateGameEntity,
+            cameraId);
+
+        m_activeCamera = cameraId;
+        m_ownsActiveCamera = true;
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::SetFovDegrees, 68.0f);
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::SetNearClipDistance, 0.08f);
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::SetFarClipDistance, 600.0f);
+        Camera::CameraRequestBus::Event(m_activeCamera, &Camera::CameraRequestBus::Events::MakeActiveView);
+    }
+
+    void SpaceKartLegendsSystemComponent::DestroyOwnedCamera()
+    {
+        if (m_ownsActiveCamera && m_activeCamera.IsValid())
+        {
+            AzFramework::GameEntityContextRequestBus::Broadcast(
+                &AzFramework::GameEntityContextRequestBus::Events::DestroyGameEntity,
+                m_activeCamera);
+        }
+        m_ownsActiveCamera = false;
+    }
+
+    int SpaceKartLegendsSystemComponent::PointsForPlace(int place)
+    {
+        switch (place)
+        {
+        case 1:
+            return 10;
+        case 2:
+            return 7;
+        case 3:
+            return 5;
+        default:
+            return 3;
+        }
+    }
+
+    void SpaceKartLegendsSystemComponent::NavigateFrontend(int direction)
+    {
+        if (m_frontendState == FrontendState::PilotSelection)
+        {
+            m_race.SelectPilot(direction);
+            ResetInputState();
+        }
+    }
+
+    void SpaceKartLegendsSystemComponent::ConfirmFrontend()
+    {
+        switch (m_frontendState)
+        {
+        case FrontendState::PilotSelection:
+            m_currentCircuit = 0;
+            m_championshipPoints = 0;
+            m_lastRacePoints = 0;
+            m_resultHandled = false;
+            m_race.Reset(m_currentCircuit);
+            ResetInputState();
+            m_frontendState = FrontendState::Racing;
+            break;
+
+        case FrontendState::Results:
+            if (m_currentCircuit + 1 < SpaceKartRace::CircuitCount)
+            {
+                ++m_currentCircuit;
+                m_resultHandled = false;
+                m_lastRacePoints = 0;
+                m_race.Reset(m_currentCircuit);
+                ResetInputState();
+                m_frontendState = FrontendState::Racing;
+            }
+            else
+            {
+                ResetInputState();
+                m_frontendState = FrontendState::ChampionshipComplete;
+            }
+            break;
+
+        case FrontendState::ChampionshipComplete:
+            m_currentCircuit = 0;
+            m_championshipPoints = 0;
+            m_lastRacePoints = 0;
+            m_resultHandled = false;
+            m_race.Reset(0);
+            ResetInputState();
+            m_frontendState = FrontendState::PilotSelection;
+            break;
+
+        case FrontendState::Racing:
+            break;
+        }
+    }
+
+    void SpaceKartLegendsSystemComponent::FinishCurrentRace()
+    {
+        if (m_resultHandled)
+        {
+            return;
+        }
+
+        m_lastRacePoints = PointsForPlace(m_race.GetPlayer().m_place);
+        m_championshipPoints += m_lastRacePoints;
+        m_resultHandled = true;
+        ResetInputState();
+        m_frontendState = FrontendState::Results;
+    }
+
+    void SpaceKartLegendsSystemComponent::RestartCurrentRace()
+    {
+        if (m_frontendState == FrontendState::Racing || m_frontendState == FrontendState::Results)
+        {
+            if (m_frontendState == FrontendState::Results && m_resultHandled)
+            {
+                m_championshipPoints = AZStd::max(0, m_championshipPoints - m_lastRacePoints);
+            }
+            m_lastRacePoints = 0;
+            m_resultHandled = false;
+            m_race.Reset(m_currentCircuit);
+            ResetInputState();
+            m_frontendState = FrontendState::Racing;
+        }
+    }
+
+    void SpaceKartLegendsSystemComponent::OnTick(float deltaTime, [[maybe_unused]] AZ::ScriptTimePoint time)
+    {
+        if (m_frontendState == FrontendState::Racing)
+        {
+            ApplyDigitalSteering();
+            m_race.SetAccelerating(m_acceleratePressed);
+            m_race.SetBraking(m_brakePressed || m_activeBrakeTouches > 0);
+            m_race.SetDrifting(m_driftPressed || m_activeDriftTouches > 0);
+            m_race.Update(deltaTime);
+            m_race.RefreshPickupTargets();
+
+            if (m_race.GetRacePhase() == RacePhase::Finished)
+            {
+                FinishCurrentRace();
+            }
+        }
+        UpdateCamera();
+    }
+
+    void SpaceKartLegendsSystemComponent::ApplyDigitalSteering()
+    {
+        float steering = m_gamepadSteering + m_touchSteering;
+        steering += m_rightPressed ? 1.0f : 0.0f;
+        steering -= m_leftPressed ? 1.0f : 0.0f;
+        m_race.SetSteering(AZStd::max(-1.0f, AZStd::min(1.0f, steering)));
+    }
+
+    void SpaceKartLegendsSystemComponent::ReleaseTouchRole(size_t touchIndex)
+    {
+        if (touchIndex >= m_touchRoles.size())
+        {
+            return;
+        }
+
+        switch (m_touchRoles[touchIndex])
+        {
+        case TouchRole::Steering:
+            m_touchSteering = 0.0f;
+            break;
+        case TouchRole::Drift:
+            m_activeDriftTouches = AZStd::max(0, m_activeDriftTouches - 1);
+            break;
+        case TouchRole::Brake:
+            m_activeBrakeTouches = AZStd::max(0, m_activeBrakeTouches - 1);
+            break;
+        case TouchRole::None:
+            break;
+        }
+        m_touchRoles[touchIndex] = TouchRole::None;
+    }
+
+    bool SpaceKartLegendsSystemComponent::HandleTouchInput(const AzFramework::InputChannel& inputChannel)
+    {
+        const auto& touches = AzFramework::InputDeviceTouch::Touch::All;
+        size_t touchIndex = 0;
+        while (touchIndex < touches.size() && touches[touchIndex] != inputChannel.GetInputChannelId())
+        {
+            ++touchIndex;
+        }
+        if (touchIndex >= touches.size() || touchIndex >= m_touchRoles.size())
+        {
+            return false;
+        }
+
+        const auto* positionData = inputChannel.GetCustomData<AzFramework::InputChannel::PositionData2D>();
+        if (!positionData)
+        {
+            return false;
+        }
+
+        if (inputChannel.IsStateEnded())
+        {
+            ReleaseTouchRole(touchIndex);
+            return true;
+        }
+
+        const float x = positionData->m_normalizedPosition.GetX();
+        const float y = positionData->m_normalizedPosition.GetY();
+
+        if (m_frontendState != FrontendState::Racing)
+        {
+            if (inputChannel.IsStateBegan())
+            {
+                if (m_frontendState == FrontendState::PilotSelection && x < 0.34f)
+                {
+                    NavigateFrontend(-1);
+                }
+                else if (m_frontendState == FrontendState::PilotSelection && x < 0.68f)
+                {
+                    NavigateFrontend(1);
+                }
+                else
+                {
+                    ConfirmFrontend();
+                }
+            }
+            return true;
+        }
+
+        if (inputChannel.IsStateBegan())
+        {
+            ReleaseTouchRole(touchIndex);
+            if (x < 0.55f)
+            {
+                m_touchRoles[touchIndex] = TouchRole::Steering;
+            }
+            else if (y < 0.34f)
+            {
+                m_race.UseItem();
+                return true;
+            }
+            else if (y < 0.78f)
+            {
+                m_touchRoles[touchIndex] = TouchRole::Drift;
+                ++m_activeDriftTouches;
+                return true;
+            }
+            else
+            {
+                m_touchRoles[touchIndex] = TouchRole::Brake;
+                ++m_activeBrakeTouches;
+                return true;
+            }
+        }
+
+        if (m_touchRoles[touchIndex] == TouchRole::Steering)
+        {
+            const float centered = (x - 0.275f) / 0.24f;
+            m_touchSteering = AZStd::max(-1.0f, AZStd::min(1.0f, centered));
+        }
+        return true;
+    }
+
+    bool SpaceKartLegendsSystemComponent::OnInputChannelEventFiltered(const AzFramework::InputChannel& inputChannel)
+    {
+        if (AzFramework::InputDeviceTouch::IsTouchDevice(inputChannel.GetInputDevice().GetInputDeviceId()))
+        {
+            return HandleTouchInput(inputChannel);
+        }
+
+        const AzFramework::InputChannelId& id = inputChannel.GetInputChannelId();
+        const bool began = inputChannel.GetState() == AzFramework::InputChannel::State::Began;
+        const bool active = inputChannel.GetState() != AzFramework::InputChannel::State::Ended;
+
+        if (m_frontendState != FrontendState::Racing)
+        {
+            if (began && (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericA ||
+                          id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowLeft))
+            {
+                NavigateFrontend(-1);
+                return true;
+            }
+            if (began && (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericD ||
+                          id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowRight))
+            {
+                NavigateFrontend(1);
+                return true;
+            }
+            if (began && (id == AzFramework::InputDeviceKeyboard::Key::EditEnter ||
+                          id == AzFramework::InputDeviceKeyboard::Key::EditSpace ||
+                          id == AzFramework::InputDeviceKeyboard::Key::AlphanumericN ||
+                          id == AzFramework::InputDeviceGamepad::Button::A ||
+                          id == AzFramework::InputDeviceGamepad::Button::B))
+            {
+                ConfirmFrontend();
+                return true;
+            }
+            if (began && id == AzFramework::InputDeviceKeyboard::Key::AlphanumericR)
+            {
+                RestartCurrentRace();
+                return true;
+            }
+            return false;
+        }
+
+        if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericA ||
+            id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowLeft)
+        {
+            m_leftPressed = active;
+            return true;
+        }
+        if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericD ||
+            id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowRight)
+        {
+            m_rightPressed = active;
+            return true;
+        }
+        if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericW ||
+            id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowUp)
+        {
+            m_acceleratePressed = active;
+            return true;
+        }
+        if (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericS ||
+            id == AzFramework::InputDeviceKeyboard::Key::NavigationArrowDown)
+        {
+            m_brakePressed = active;
+            return true;
+        }
+        if (id == AzFramework::InputDeviceKeyboard::Key::EditSpace ||
+            id == AzFramework::InputDeviceGamepad::Button::A)
+        {
+            m_driftPressed = active;
+            return true;
+        }
+        if (began && (id == AzFramework::InputDeviceKeyboard::Key::AlphanumericB ||
+                      id == AzFramework::InputDeviceGamepad::Button::B))
+        {
+            m_race.UseItem();
+            return true;
+        }
+        if (began && id == AzFramework::InputDeviceKeyboard::Key::AlphanumericR)
+        {
+            m_race.RecoverPlayer();
+            return true;
+        }
+        if (id == AzFramework::InputDeviceGamepad::ThumbStickAxis1D::LX)
+        {
+            m_gamepadSteering = inputChannel.GetValue();
+            return true;
+        }
+        return false;
+    }
+
+    void SpaceKartLegendsSystemComponent::UpdateCamera()
+    {
+        EnsureActiveCamera();
+        if (!m_activeCamera.IsValid())
+        {
+            return;
+        }
+
+        const AZ::Vector3 playerPosition = m_race.GetPlayerPosition();
+        const AZ::Vector3 tangent = m_race.GetPlayerTangent();
+        const AZ::Vector3 up = AZ::Vector3::CreateAxisZ();
+        const AZ::Vector3 cameraPosition = playerPosition - tangent * 12.5f + up * 6.8f;
+        const AZ::Vector3 cameraTarget = playerPosition + tangent * 5.5f + up * 1.1f;
+        const AZ::Transform cameraTransform = AZ::Transform::CreateLookAt(
+            cameraPosition,
+            cameraTarget,
+            AZ::Transform::Axis::YPositive);
+        AZ::TransformBus::Event(m_activeCamera, &AZ::TransformBus::Events::SetWorldTM, cameraTransform);
+    }
+
+    void SpaceKartLegendsSystemComponent::DrawFrontendHud(AzFramework::DebugDisplayRequests& debugDisplay) const
+    {
+        debugDisplay.SetColor(AZ::Color(0.72f, 0.92f, 1.0f, 1.0f));
+
+        if (m_frontendState == FrontendState::PilotSelection)
+        {
+            static constexpr const char* Roles[SpaceKartRace::DriverCount] = {
+                "Equilibre",
+                "Vitesse",
+                "Maniabilite",
+                "Technique"
+            };
+            const int pilotIndex = m_race.GetSelectedPilotIndex();
+            const AZStd::string pilotLine = AZStd::string::format(
+                "Pilote : %s  |  Style : %s",
+                m_race.GetSelectedPilotName(),
+                Roles[pilotIndex]);
+
+            debugDisplay.Draw2dTextLabel(0.50f, 0.16f, 2.7f, "SPACE KART LEGENDS", true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.34f, 1.8f, pilotLine.c_str(), true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.47f, 1.25f, "Championnat spatial : 5 circuits - 3 tours", true);
+            debugDisplay.Draw2dTextLabel(0.30f, 0.72f, 1.20f, "< PILOTE", true);
+            debugDisplay.Draw2dTextLabel(0.52f, 0.72f, 1.20f, "PILOTE >", true);
+            debugDisplay.Draw2dTextLabel(0.82f, 0.72f, 1.20f, "DEMARRER", true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.86f, 0.95f, "Clavier : gauche/droite puis Entree", true);
+            return;
+        }
+
+        if (m_frontendState == FrontendState::Results)
+        {
+            const DriverState& player = m_race.GetPlayer();
+            const AZStd::string result = AZStd::string::format(
+                "Position %d/%d  |  +%d points",
+                player.m_place,
+                SpaceKartRace::DriverCount,
+                m_lastRacePoints);
+            const AZStd::string total = AZStd::string::format(
+                "Total championnat : %d points",
+                m_championshipPoints);
+            const AZStd::string next = m_currentCircuit + 1 < SpaceKartRace::CircuitCount
+                ? AZStd::string::format("Circuit suivant : %d/%d", m_currentCircuit + 2, SpaceKartRace::CircuitCount)
+                : AZStd::string("Voir le classement final");
+
+            debugDisplay.Draw2dTextLabel(0.50f, 0.24f, 2.5f, "COURSE TERMINEE", true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.40f, 1.65f, result.c_str(), true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.51f, 1.30f, total.c_str(), true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.63f, 1.15f, next.c_str(), true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.78f, 1.05f, "Touchez l'ecran ou appuyez sur Entree", true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.87f, 0.90f, "R : recommencer sans doubler les points", true);
+            return;
+        }
+
+        if (m_frontendState == FrontendState::ChampionshipComplete)
+        {
+            const AZStd::string total = AZStd::string::format(
+                "Score final : %d points",
+                m_championshipPoints);
+            const char* verdict = m_championshipPoints >= 42
+                ? "LEGENDE DE L'ESPACE"
+                : (m_championshipPoints >= 30 ? "PILOTE ELITE" : "CHAMPIONNAT TERMINE");
+
+            debugDisplay.Draw2dTextLabel(0.50f, 0.22f, 2.6f, verdict, true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.43f, 1.75f, total.c_str(), true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.61f, 1.20f, "5 circuits termines", true);
+            debugDisplay.Draw2dTextLabel(0.50f, 0.78f, 1.05f, "Valider pour recommencer", true);
+        }
+    }
+
+    void SpaceKartLegendsSystemComponent::DisplayViewport(
+        [[maybe_unused]] const AzFramework::ViewportInfo& viewportInfo,
+        AzFramework::DebugDisplayRequests& debugDisplay)
+    {
+        m_race.DrawWorld(debugDisplay);
+    }
+
+    void SpaceKartLegendsSystemComponent::DisplayViewport2d(
+        [[maybe_unused]] const AzFramework::ViewportInfo& viewportInfo,
+        AzFramework::DebugDisplayRequests& debugDisplay)
+    {
+        if (m_frontendState == FrontendState::Racing)
+        {
+            m_race.DrawHud(debugDisplay);
+        }
+        else
+        {
+            DrawFrontendHud(debugDisplay);
+        }
+    }
+}
