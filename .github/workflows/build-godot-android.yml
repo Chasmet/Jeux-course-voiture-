@@ -87,11 +87,11 @@ jobs:
             echo "PRIVATE_MODELS=0" >> "$GITHUB_ENV"
           fi
 
-      - name: Configure Godot Android editor settings and debug keystore
+      - name: Create debug keystore and configure Godot EditorSettings
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.config/godot" "$HOME/.android"
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
           if [ ! -f "$HOME/.android/debug.keystore" ]; then
             keytool -genkeypair -v \
               -keystore "$HOME/.android/debug.keystore" \
@@ -99,13 +99,11 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-          cat > "$HOME/.config/godot/editor_settings-4.6.tres" <<EOF
-          [gd_resource type="EditorSettings" format=3]
-
-          [resource]
-          export/android/android_sdk_path = "$ANDROID_HOME"
-          export/android/java_sdk_path = "$JAVA_HOME"
-          EOF
+          GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          "$GODOT" --headless --editor --path godot \
+            --script godot/tools/configure_android_editor.gd 2>&1 | tee android-editor-settings.txt
+          grep -F "Configured Android SDK: $ANDROID_HOME" android-editor-settings.txt
+          grep -F "Configured Java SDK: $JAVA_HOME" android-editor-settings.txt
 
       - name: Import Godot project and validate scripts
         shell: bash
@@ -155,6 +153,7 @@ jobs:
           name: SpaceKartLegends-Godot-Android-diagnostics
           path: |
             dist/
+            android-editor-settings.txt
             godot-import.log
             godot-export.log
           if-no-files-found: warn
