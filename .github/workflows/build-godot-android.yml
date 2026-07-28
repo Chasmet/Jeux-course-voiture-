@@ -19,7 +19,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 70
     env:
       GODOT_VERSION: "4.6.3"
       GODOT_STATUS: "stable"
@@ -35,15 +35,24 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Android SDK 34
+      - name: Install complete Godot Android SDK requirements
         shell: bash
         run: |
           set -euo pipefail
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "cmdline-tools;latest" \
             "platform-tools" \
             "platforms;android-34" \
-            "build-tools;34.0.0"
+            "platforms;android-35" \
+            "build-tools;34.0.0" \
+            "build-tools;35.0.1" \
+            "cmake;3.10.2.4988404" \
+            "ndk;28.1.13356709"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -x "$ANDROID_HOME/build-tools/35.0.1/apksigner"
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/ndk/28.1.13356709"
 
       - name: Download official Godot editor and Android export templates
         shell: bash
@@ -132,9 +141,9 @@ jobs:
           APK="dist/SpaceKartLegends-Godot-debug.apk"
           test -s "$APK"
           unzip -t "$APK" >/dev/null
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK" | tee dist/SIGNATURE.txt
-          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -P 16 -v 4 "$APK"
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | tee dist/BADGING.txt
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee dist/SIGNATURE.txt
+          "$ANDROID_HOME/build-tools/35.0.1/zipalign" -c -P 16 -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/35.0.1/aapt" dump badging "$APK" | tee dist/BADGING.txt
           grep -F "package: name='com.chasmet.spacekartlegends'" dist/BADGING.txt
           sha256sum "$APK" | tee dist/SHA256SUMS.txt
           printf 'private_models=%s\n' "$PRIVATE_MODELS" > dist/BUILD_VARIANT.txt
