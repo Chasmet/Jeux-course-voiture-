@@ -26,10 +26,8 @@ on:
 permissions:
   contents: read
 
-# Final builds always require the private Cheikh, Yvane and Nelvyn character
-# pack. The archive can be supplied either as a repository secret or through a
-# protected path mounted on the self-hosted runner. No build without these
-# pilots is published as a finished APK.
+# Final builds require the protected Cheikh, Yvane and Nelvyn character pack.
+# No archive is published unless a genuine signed APK passes all checks.
 jobs:
   build-apk:
     runs-on: [self-hosted, Linux, X64, o3de-26.05, android]
@@ -54,6 +52,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Verify Android and O3DE build host
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_android_build_host.py
+          BUILD_TOOLS_DIR="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$BUILD_TOOLS_DIR"
+          echo "APKSIGNER=$BUILD_TOOLS_DIR/apksigner" >> "$GITHUB_ENV"
+          echo "AAPT2=$BUILD_TOOLS_DIR/aapt2" >> "$GITHUB_ENV"
+          echo "ZIPALIGN=$BUILD_TOOLS_DIR/zipalign" >> "$GITHUB_ENV"
 
       - name: Install and validate private pilot pack
         shell: bash
@@ -106,24 +115,6 @@ jobs:
           python3 scripts/validate_project.py
           python3 scripts/validate_environment_assets.py
           python3 scripts/validate_android_scaffold.py
-
-      - name: Verify Android and O3DE tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -x "$O3DE_ENGINE_PATH/scripts/o3de.sh"
-          test -f "$O3DE_ENGINE_PATH/scripts/o3de/ExportScripts/export_source_android.py"
-          test -n "${ANDROID_SDK_ROOT:-}"
-          command -v java
-          command -v gradle
-          command -v ninja
-          "$O3DE_ENGINE_PATH/scripts/o3de.sh" --help >/dev/null
-          APKSIGNER="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          AAPT2="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt2 | sort -V | tail -n 1)"
-          test -x "$APKSIGNER"
-          test -x "$AAPT2"
-          echo "APKSIGNER=$APKSIGNER" >> "$GITHUB_ENV"
-          echo "AAPT2=$AAPT2" >> "$GITHUB_ENV"
 
       - name: Register engine and project
         shell: bash
@@ -187,6 +178,7 @@ jobs:
           test -s "$OUTPUT_APK"
           unzip -t "$OUTPUT_APK" >/dev/null
           "$APKSIGNER" verify --verbose --print-certs "$OUTPUT_APK"
+          "$ZIPALIGN" -c -P 16 -v 4 "$OUTPUT_APK"
 
           BADGING="$($AAPT2 dump badging "$OUTPUT_APK")"
           printf '%s\n' "$BADGING" > dist/APK_BADGING.txt
