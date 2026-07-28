@@ -1,0 +1,29 @@
+{
+  "project_name": "SpaceKartLegends",
+  "version": "0.1.0",
+  "project_id": "{C2AF801A-816F-46A8-A1D4-0B911A9AA613}",
+  "origin": "https://github.com/Chasmet/Jeux-course-voiture-",
+  "license": "Apache-2.0 OR MIT",
+  "display_name": "Space Kart Legends",
+  "summary": "Jeu de karting arcade 3D spatial pour Android construit avec O3DE.",
+  "canonical_tags": ["Project"],
+  "user_tags": ["Kart", "Racing", "Android", "Space", "3D"],
+  "engine": "o3de",
+  "engine_version": "26.05.0",
+  "external_subdirectories": ["Gem"],
+  "restricted": "SpaceKartLegends",
+  "gem_names": [
+    "SpaceKartLegends",
+    "Atom",
+    "Camera",
+    "DebugDraw",
+    "EMotionFX",
+    "GameState",
+    "LyShine",
+    "MiniAudio",
+    "PhysX5",
+    "PrimitiveAssets",
+    "PrefabBuilder",
+    "StartingPointInput"
+  ]
+}

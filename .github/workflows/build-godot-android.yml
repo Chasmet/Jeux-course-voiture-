@@ -1,0 +1,198 @@
+name: Build Godot Android APK
+
+on:
+  push:
+    branches:
+      - agent/godot-space-kart-v1
+    paths:
+      - "godot/**"
+      - ".github/workflows/build-godot-android.yml"
+  pull_request:
+    paths:
+      - "godot/**"
+      - ".github/workflows/build-godot-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      GODOT_VERSION: "4.6.3"
+      GODOT_STATUS: "stable"
+      PRIVATE_CHARACTER_PACK_B64: ${{ secrets.PRIVATE_CHARACTER_PACK_B64 }}
+
+    steps:
+      - name: Checkout Godot migration branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install complete Godot Android SDK requirements
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "cmdline-tools;latest" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "platforms;android-35" \
+            "build-tools;34.0.0" \
+            "build-tools;35.0.1" \
+            "cmake;3.10.2.4988404" \
+            "ndk;28.1.13356709"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -x "$ANDROID_HOME/build-tools/35.0.1/apksigner"
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/ndk/28.1.13356709"
+
+      - name: Download official Godot editor and Android export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_STATUS}"
+          curl -fL --retry 5 -o godot-editor.zip \
+            "$BASE/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip"
+          curl -fL --retry 5 -o godot-templates.tpz \
+            "$BASE/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz"
+          unzip -q godot-editor.zip -d godot-bin
+          chmod +x godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
+          unzip -q godot-templates.tpz -d template-unpack
+          cp -a template-unpack/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
+          godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64 --version
+
+      - name: Install private Cheikh Yvane Nelvyn models when secret is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${PRIVATE_CHARACTER_PACK_B64:-}" ]; then
+            printf '%s' "$PRIVATE_CHARACTER_PACK_B64" | base64 --decode > private-pilots.zip
+            unzip -t private-pilots.zip >/dev/null
+            python3 godot/tools/install_private_pack.py private-pilots.zip
+            test -s godot/private_models/cheikh.glb
+            test -s godot/private_models/yvane.glb
+            test -s godot/private_models/nelvyn.glb
+            echo "PRIVATE_MODELS=1" >> "$GITHUB_ENV"
+          else
+            echo "Private model secret is absent; procedural pilot fallbacks will be used for this public CI build."
+            echo "PRIVATE_MODELS=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create debug keystore and canonical Godot 4 editor settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          cat "$HOME/.config/godot/editor_settings-4.tres" | tee android-editor-settings.txt
+
+      - name: Import Godot project and validate scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          "$GODOT" --headless --editor --path godot --quit-after 30 --verbose 2>&1 | tee godot-import.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" godot-import.log; then
+            echo "Godot script validation failed." >&2
+            exit 1
+          fi
+
+      - name: Export real Godot Android APK
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          APK="$GITHUB_WORKSPACE/dist/SpaceKartLegends-Godot-debug.apk"
+          set +e
+          "$GODOT" --headless --path godot --export-debug Android "$APK" 2>&1 | tee godot-export.log
+          EXPORT_STATUS=${PIPESTATUS[0]}
+          set -e
+          tail -n 180 godot-export.log || true
+          if [ "$EXPORT_STATUS" -ne 0 ]; then
+            echo "Godot Android export command failed with status $EXPORT_STATUS." >&2
+            exit "$EXPORT_STATUS"
+          fi
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee dist/SIGNATURE.txt
+          "$ANDROID_HOME/build-tools/35.0.1/zipalign" -c -P 16 -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/35.0.1/aapt" dump badging "$APK" | tee dist/BADGING.txt
+          grep -F "package: name='com.chasmet.spacekartlegends'" dist/BADGING.txt
+          sha256sum "$APK" | tee dist/SHA256SUMS.txt
+          printf 'private_models=%s\n' "$PRIVATE_MODELS" > dist/BUILD_VARIANT.txt
+
+      - name: Prepare private local build kit without personal models
+        shell: bash
+        run: |
+          set -euo pipefail
+          KIT="$GITHUB_WORKSPACE/local-private-build-kit"
+          rm -rf "$KIT"
+          mkdir -p \
+            "$KIT/godot-bin" \
+            "$KIT/export_templates/${GODOT_VERSION}.${GODOT_STATUS}" \
+            "$KIT/android-sdk/build-tools" \
+            "$KIT/android-sdk/platform-tools"
+          cp "godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" "$KIT/godot-bin/godot"
+          cp "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/android_debug.apk" \
+             "$KIT/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
+          cp "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/android_release.apk" \
+             "$KIT/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
+          cp -a "$ANDROID_HOME/build-tools/35.0.1" "$KIT/android-sdk/build-tools/"
+          cp "$ANDROID_HOME/platform-tools/adb" "$KIT/android-sdk/platform-tools/adb"
+          cp -a godot "$KIT/project"
+          find "$KIT/project/private_models" -type f ! -name '.gitignore' -delete
+          cat > "$KIT/BUILD_PRIVATE_APK.txt" <<EOF
+          This kit contains the Godot 4.6.3 editor, Android debug/release templates,
+          Android signing tools and the public Godot project. It contains no private
+          Cheikh, Yvane or Nelvyn model. Install the protected V2 pack with:
+          python3 project/tools/install_private_pack.py /path/to/SpaceKartLegends-vrais-pilotes-rigges-v2.zip
+          Then import and export the Android preset using the included Godot binary.
+          EOF
+
+      - name: Upload Godot APK and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-Godot-Android-diagnostics
+          path: |
+            dist/
+            android-editor-settings.txt
+            godot-import.log
+            godot-export.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload private local Godot build kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-Godot-local-private-build-kit
+          path: local-private-build-kit/
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 7

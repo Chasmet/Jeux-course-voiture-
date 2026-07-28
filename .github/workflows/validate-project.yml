@@ -1,0 +1,59 @@
+name: Validate O3DE Project
+
+on:
+  push:
+    branches:
+      - main
+      - agent/**
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate pilot and kart blockout models
+        run: python scripts/generate_blockout_assets.py
+
+      - name: Generate track and item blockout models
+        run: python scripts/generate_environment_assets.py
+
+      - name: Validate manifests, generated assets and gameplay source
+        run: python scripts/validate_project.py
+
+      - name: Validate generated track and item geometry
+        run: python scripts/validate_environment_assets.py
+
+      - name: Validate Android export scaffold and startup level
+        run: python scripts/validate_android_scaffold.py
+
+      - name: Check JSON formatting
+        run: |
+          python -m json.tool project.json >/dev/null
+          python -m json.tool Gem/gem.json >/dev/null
+          python -m json.tool Assets/Config/game_content.json >/dev/null
+          python -m json.tool Platform/Android/android_project.json >/dev/null
+          python -m json.tool Registry/load_level.setreg >/dev/null
+          python -m json.tool Registry/Platform/Android/quality.setreg >/dev/null
+          python -m json.tool Levels/SpaceKartLegends/SpaceKartLegends.prefab >/dev/null
+
+      - name: Publish generated 3D blockouts for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-3D-blockouts
+          path: Assets/Blockout/**/*.gltf
+          if-no-files-found: error
+          retention-days: 14

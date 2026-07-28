@@ -1,0 +1,216 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: O3DE build configuration
+        required: true
+        default: profile
+        type: choice
+        options:
+          - profile
+          - release
+      asset_mode:
+        description: Android asset packaging
+        required: true
+        default: PAK
+        type: choice
+        options:
+          - PAK
+          - LOOSE
+  push:
+    tags:
+      - "android-v*"
+
+permissions:
+  contents: read
+
+# Final builds require the protected Cheikh, Yvane and Nelvyn character pack.
+# No archive is published unless a genuine signed APK passes all checks.
+jobs:
+  build-apk:
+    runs-on: [self-hosted, Linux, X64, o3de-26.05, android]
+    timeout-minutes: 180
+
+    env:
+      O3DE_ENGINE_PATH: /opt/O3DE/26.05
+      ANDROID_BUILD_PATH: ${{ github.workspace }}/build/android
+      BUILD_CONFIGURATION: ${{ inputs.configuration || 'profile' }}
+      ASSET_MODE: ${{ inputs.asset_mode || 'PAK' }}
+      EXPECTED_PACKAGE_NAME: com.chasmet.spacekartlegends
+      PRIVATE_CHARACTER_PACK_B64: ${{ secrets.PRIVATE_CHARACTER_PACK_B64 }}
+      PRIVATE_CHARACTER_PACK_PATH: ${{ vars.PRIVATE_CHARACTER_PACK_PATH }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify Android and O3DE build host
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_android_build_host.py
+          BUILD_TOOLS_DIR="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$BUILD_TOOLS_DIR"
+          echo "APKSIGNER=$BUILD_TOOLS_DIR/apksigner" >> "$GITHUB_ENV"
+          echo "AAPT2=$BUILD_TOOLS_DIR/aapt2" >> "$GITHUB_ENV"
+          echo "ZIPALIGN=$BUILD_TOOLS_DIR/zipalign" >> "$GITHUB_ENV"
+
+      - name: Install and validate private pilot pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .private-build-input
+          PRIVATE_ARCHIVE="$GITHUB_WORKSPACE/.private-build-input/private-characters.zip"
+
+          if [ -n "${PRIVATE_CHARACTER_PACK_B64:-}" ]; then
+            printf '%s' "$PRIVATE_CHARACTER_PACK_B64" | base64 --decode > "$PRIVATE_ARCHIVE"
+          elif [ -n "${PRIVATE_CHARACTER_PACK_PATH:-}" ] && [ -f "$PRIVATE_CHARACTER_PACK_PATH" ]; then
+            cp "$PRIVATE_CHARACTER_PACK_PATH" "$PRIVATE_ARCHIVE"
+          elif [ -f "/opt/spacekart-private/SpaceKartLegends-vrais-pilotes-rigges-v2.zip" ]; then
+            cp "/opt/spacekart-private/SpaceKartLegends-vrais-pilotes-rigges-v2.zip" "$PRIVATE_ARCHIVE"
+          else
+            echo "A protected private character pack is mandatory for a final build." >&2
+            exit 1
+          fi
+
+          test -s "$PRIVATE_ARCHIVE"
+          unzip -t "$PRIVATE_ARCHIVE" >/dev/null
+          python3 scripts/install_private_character_pack.py "$PRIVATE_ARCHIVE"
+          test -f Assets/Config/private_character_overrides.json
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path("Assets/Config/private_character_overrides.json").read_text(encoding="utf-8"))
+          assert config.get("enabled") is True
+          pilots = config.get("pilots", {})
+          assert set(pilots) == {"cheikh", "yvane", "nelvyn"}
+          for pilot, entry in pilots.items():
+              assert entry.get("rigVersion") == 2
+              assert entry.get("jointCount") == 20
+              source = Path("Assets") / entry["sourceModel"]
+              assert source.is_file() and source.stat().st_size > 0, (pilot, source)
+          print("Private pilot pack verified for Cheikh, Yvane and Nelvyn.")
+          PY
+
+          rm -rf .private-build-input
+
+      - name: Generate all blockout models
+        run: |
+          python3 scripts/generate_blockout_assets.py
+          python3 scripts/generate_environment_assets.py
+
+      - name: Validate project, generated geometry and Android startup files
+        run: |
+          python3 scripts/validate_project.py
+          python3 scripts/validate_environment_assets.py
+          python3 scripts/validate_android_scaffold.py
+
+      - name: Register engine and project
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" register --this-engine
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" register --project-path "$GITHUB_WORKSPACE"
+
+      - name: Configure Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "sdk.root=$ANDROID_SDK_ROOT"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "platform.sdk.api=34"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "ndk.version=25.*"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "android.gradle.plugin=8.1.0"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --set-value "asset.mode=$ASSET_MODE"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" android-configure --validate
+
+      - name: Export O3DE Android project and build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$ANDROID_BUILD_PATH"
+          "$O3DE_ENGINE_PATH/scripts/o3de.sh" export-project \
+            --export-script "$O3DE_ENGINE_PATH/scripts/o3de/ExportScripts/export_source_android.py" \
+            --project-path "$GITHUB_WORKSPACE" \
+            --android-build-path "$ANDROID_BUILD_PATH" \
+            --log-level INFO \
+            --config "$BUILD_CONFIGURATION" \
+            --asset-mode "$ASSET_MODE"
+
+      - name: Verify private pilots were converted to runtime products
+        shell: bash
+        run: |
+          set -euo pipefail
+          SEARCH_ROOTS=("$ANDROID_BUILD_PATH" "$GITHUB_WORKSPACE/Cache")
+          for pilot in cheikh yvane nelvyn; do
+            PRODUCT="$(find "${SEARCH_ROOTS[@]}" -type f \
+              \( -iname "*${pilot}*.actor" -o -iname "*${pilot}*.azmodel" \) \
+              -print -quit 2>/dev/null || true)"
+            if [ -z "$PRODUCT" ]; then
+              echo "No processed O3DE runtime product found for ${pilot}. Raw GLB presence is not sufficient." >&2
+              exit 1
+            fi
+            test -s "$PRODUCT"
+            echo "Verified processed pilot product: $PRODUCT"
+          done
+
+      - name: Reject raw personal media from build outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_MEDIA="$(find "$ANDROID_BUILD_PATH" "$GITHUB_WORKSPACE/Cache" -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.mp4' -o -iname '*.mov' \) \
+            -print -quit 2>/dev/null || true)"
+          if [ -n "$RAW_MEDIA" ]; then
+            echo "Raw personal media leaked into build output: $RAW_MEDIA" >&2
+            exit 1
+          fi
+
+      - name: Collect and verify APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK_PATH="$(find "$ANDROID_BUILD_PATH" -type f -name '*.apk' ! -name '*unaligned*' | sort | head -n 1)"
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK produced by the O3DE export." >&2
+            exit 1
+          fi
+
+          OUTPUT_APK="dist/SpaceKartLegends-${BUILD_CONFIGURATION}.apk"
+          cp "$APK_PATH" "$OUTPUT_APK"
+          test -s "$OUTPUT_APK"
+          unzip -t "$OUTPUT_APK" >/dev/null
+          "$APKSIGNER" verify --verbose --print-certs "$OUTPUT_APK"
+          "$ZIPALIGN" -c -P 16 -v 4 "$OUTPUT_APK"
+
+          BADGING="$($AAPT2 dump badging "$OUTPUT_APK")"
+          printf '%s\n' "$BADGING" > dist/APK_BADGING.txt
+          printf '%s\n' "$BADGING" | grep -F "package: name='$EXPECTED_PACKAGE_NAME'"
+          printf '%s\n' "$BADGING" | grep -F "sdkVersion:'21'"
+          printf '%s\n' "$BADGING" | grep -F "targetSdkVersion:'34'"
+
+          sha256sum "$OUTPUT_APK" | tee dist/SHA256SUMS.txt
+          echo "path=$OUTPUT_APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-Android-${{ env.BUILD_CONFIGURATION }}
+          path: |
+            ${{ steps.apk.outputs.path }}
+            dist/SHA256SUMS.txt
+            dist/APK_BADGING.txt
+          if-no-files-found: error
+          retention-days: 30
