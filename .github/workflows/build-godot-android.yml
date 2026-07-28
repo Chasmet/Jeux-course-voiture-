@@ -147,6 +147,34 @@ jobs:
           sha256sum "$APK" | tee dist/SHA256SUMS.txt
           printf 'private_models=%s\n' "$PRIVATE_MODELS" > dist/BUILD_VARIANT.txt
 
+      - name: Prepare private local build kit without personal models
+        shell: bash
+        run: |
+          set -euo pipefail
+          KIT="$GITHUB_WORKSPACE/local-private-build-kit"
+          rm -rf "$KIT"
+          mkdir -p \
+            "$KIT/godot-bin" \
+            "$KIT/export_templates/${GODOT_VERSION}.${GODOT_STATUS}" \
+            "$KIT/android-sdk/build-tools" \
+            "$KIT/android-sdk/platform-tools"
+          cp "godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" "$KIT/godot-bin/godot"
+          cp "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/android_debug.apk" \
+             "$KIT/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
+          cp "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/android_release.apk" \
+             "$KIT/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
+          cp -a "$ANDROID_HOME/build-tools/35.0.1" "$KIT/android-sdk/build-tools/"
+          cp "$ANDROID_HOME/platform-tools/adb" "$KIT/android-sdk/platform-tools/adb"
+          cp -a godot "$KIT/project"
+          find "$KIT/project/private_models" -type f ! -name '.gitignore' -delete
+          cat > "$KIT/BUILD_PRIVATE_APK.txt" <<EOF
+          This kit contains the Godot 4.6.3 editor, Android debug/release templates,
+          Android signing tools and the public Godot project. It contains no private
+          Cheikh, Yvane or Nelvyn model. Install the protected V2 pack with:
+          python3 project/tools/install_private_pack.py /path/to/SpaceKartLegends-vrais-pilotes-rigges-v2.zip
+          Then import and export the Android preset using the included Godot binary.
+          EOF
+
       - name: Upload Godot APK and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -159,3 +187,12 @@ jobs:
             godot-export.log
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Upload private local Godot build kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceKartLegends-Godot-local-private-build-kit
+          path: local-private-build-kit/
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 7
