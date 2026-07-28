@@ -101,7 +101,7 @@ jobs:
           fi
           GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
           "$GODOT" --headless --editor --path godot \
-            --script godot/tools/configure_android_editor.gd 2>&1 | tee android-editor-settings.txt
+            --script res://tools/configure_android_editor.gd 2>&1 | tee android-editor-settings.txt
           grep -F "Configured Android SDK: $ANDROID_HOME" android-editor-settings.txt
           grep -F "Configured Java SDK: $JAVA_HOME" android-editor-settings.txt
 
