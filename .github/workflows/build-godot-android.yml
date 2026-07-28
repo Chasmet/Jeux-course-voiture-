@@ -116,11 +116,19 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
-          set -euo pipefail
+          set -o pipefail
           cp "$HOME/.android/debug.keystore" .android-debug.keystore
           mkdir -p dist
           GODOT="godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          set +e
           "$GODOT" --headless --path godot --export-debug Android dist/SpaceKartLegends-Godot-debug.apk 2>&1 | tee godot-export.log
+          EXPORT_STATUS=${PIPESTATUS[0]}
+          set -e
+          tail -n 180 godot-export.log || true
+          if [ "$EXPORT_STATUS" -ne 0 ]; then
+            echo "Godot Android export command failed with status $EXPORT_STATUS." >&2
+            exit "$EXPORT_STATUS"
+          fi
           APK="dist/SpaceKartLegends-Godot-debug.apk"
           test -s "$APK"
           unzip -t "$APK" >/dev/null
@@ -131,17 +139,14 @@ jobs:
           sha256sum "$APK" | tee dist/SHA256SUMS.txt
           printf 'private_models=%s\n' "$PRIVATE_MODELS" > dist/BUILD_VARIANT.txt
 
-      - name: Upload Godot APK
+      - name: Upload Godot APK and diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SpaceKartLegends-Godot-Android
+          name: SpaceKartLegends-Godot-Android-diagnostics
           path: |
-            dist/SpaceKartLegends-Godot-debug.apk
-            dist/SHA256SUMS.txt
-            dist/SIGNATURE.txt
-            dist/BADGING.txt
-            dist/BUILD_VARIANT.txt
+            dist/
             godot-import.log
             godot-export.log
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
