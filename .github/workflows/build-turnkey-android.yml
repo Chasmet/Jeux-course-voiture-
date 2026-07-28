@@ -23,7 +23,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 55
 
     steps:
       - name: Checkout repository
@@ -48,7 +48,12 @@ jobs:
         run: |
           set -euo pipefail
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "platform-tools" \
+            "emulator" \
+            "system-images;android-34;google_apis;x86_64"
 
       - name: Generate public placeholder pilots
         run: python3 android-standalone/tools/generate_placeholder_glb.py
@@ -59,6 +64,39 @@ jobs:
           set -euo pipefail
           gradle -p android-standalone :app:assembleDebug --no-daemon --stacktrace
 
+      - name: Launch and smoke test on Android 14 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-standalone/app/build/outputs/apk/debug/app-debug.apk"
+          PACKAGE="com.chasmet.spacekartlegends"
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --force --name spacekart-ci --package "system-images;android-34;google_apis;x86_64" --device pixel_6
+          sudo chmod 666 /dev/kvm || true
+          nohup "$ANDROID_HOME/emulator/emulator" \
+            -avd spacekart-ci -no-window -no-audio -no-boot-anim -no-snapshot \
+            -gpu swiftshader_indirect -camera-back none -camera-front none \
+            > emulator.log 2>&1 &
+          "$ANDROID_HOME/platform-tools/adb" wait-for-device
+          for attempt in $(seq 1 90); do
+            if [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = "1"
+          "$ANDROID_HOME/platform-tools/adb" logcat -c
+          "$ANDROID_HOME/platform-tools/adb" install -r "$APK"
+          "$ANDROID_HOME/platform-tools/adb" shell am start -W -n "$PACKAGE/.MainActivity" | tee activity-start.txt
+          sleep 12
+          "$ANDROID_HOME/platform-tools/adb" shell pidof "$PACKAGE" | grep -E '[0-9]+'
+          "$ANDROID_HOME/platform-tools/adb" shell dumpsys activity activities | grep -F "$PACKAGE/.MainActivity"
+          "$ANDROID_HOME/platform-tools/adb" logcat -d > logcat.txt
+          if grep -A 20 -B 5 -E "FATAL EXCEPTION|AndroidRuntime.*$PACKAGE|Process: $PACKAGE" logcat.txt; then
+            echo "The game crashed during emulator smoke test." >&2
+            exit 1
+          fi
+
       - name: Verify and package base APK plus signing tools
         shell: bash
         run: |
@@ -68,6 +106,8 @@ jobs:
           unzip -t "$APK" >/dev/null
           mkdir -p dist
           cp "$APK" dist/SpaceKartLegends-base-debug.apk
+          cp activity-start.txt dist/
+          cp logcat.txt dist/
           sha256sum dist/SpaceKartLegends-base-debug.apk > dist/BASE_SHA256SUMS.txt
 
           BUILD_TOOLS_DIR="$ANDROID_HOME/build-tools/34.0.0"
