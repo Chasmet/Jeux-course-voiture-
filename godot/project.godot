@@ -1,0 +1,50 @@
+; Engine configuration file.
+; Godot 4.6 migration for Space Kart Legends.
+
+config_version=5
+
+[application]
+config/name="Space Kart Legends"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.6", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/handheld/orientation=1
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[input]
+steer_left={
+"deadzone": 0.25,
+"events": [Object(InputEventKey,"physical_keycode":65), Object(InputEventKey,"physical_keycode":4194311)]
+}
+steer_right={
+"deadzone": 0.25,
+"events": [Object(InputEventKey,"physical_keycode":68), Object(InputEventKey,"physical_keycode":4194313)]
+}
+drift={
+"deadzone": 0.25,
+"events": [Object(InputEventKey,"physical_keycode":32)]
+}
+brake={
+"deadzone": 0.25,
+"events": [Object(InputEventKey,"physical_keycode":83), Object(InputEventKey,"physical_keycode":4194314)]
+}
+use_item={
+"deadzone": 0.25,
+"events": [Object(InputEventKey,"physical_keycode":69)]
+}
+
+[physics]
+common/physics_ticks_per_second=60
+
+[debug]
+settings/stdout/print_fps=false
